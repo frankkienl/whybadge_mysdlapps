@@ -2,12 +2,13 @@
 // Created by FrankkieNL on 23/08/2025.
 //
 
+//#define WHY_BADGE 1
+
 //#include "font.h"
 #include <stdio.h>
 #include <string.h>
 
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
-
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
@@ -15,6 +16,12 @@
 
 #define WINDOW_WIDTH     720
 #define WINDOW_HEIGHT    720
+#ifdef WHY_BADGE
+#define WINDOW_FLAGS     SDL_WINDOW_FULLSCREEN
+#endif
+#ifndef WHY_BADGE
+#define WINDOW_FLAGS     0
+#endif
 
 #define CDE_BG_COLOR      0x9CA0A0
 #define CDE_PANEL_COLOR   0xAEB2B2
@@ -225,7 +232,7 @@ void about_screen_logic(AppState *appstate) {
 SDL_AppResult SDL_AppIterate(void *appstate) {
     //printf("SDL_AppIterate\n");
     AppState *as = (AppState *) appstate;
-    RandomAppContext *ctx = &as->appCtx;
+    RandomAppContext *ctx = as->appCtx;
     Uint64 const now = SDL_GetTicks();
 
     SDL_RenderClear(as->renderer);
@@ -253,7 +260,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     //printf("SDL_AppEvent\n");
-    RandomAppContext *ctx = &((AppState *) appstate)->appCtx;
+    //RandomAppContext *ctx = ((AppState *) appstate)->appCtx;
     AppState *as = (AppState *) appstate;
     switch (event->type) {
         case SDL_EVENT_QUIT: return SDL_APP_SUCCESS;
@@ -281,9 +288,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     printf("SDL_AppInit\n");
+
+#ifndef WHY_BADGE
     if (!SDL_SetAppMetadata(APP_NAME, APP_VERSION, APP_ID)) {
         return SDL_APP_FAILURE;
     }
+#endif
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         printf("Couldn't initialize SDL: %s", SDL_GetError());
@@ -297,13 +307,20 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
     *appstate = as;
 
+    as->appCtx = (RandomAppContext *) SDL_calloc(1, sizeof(RandomAppContext));
+    if (!as->appCtx) {
+        SDL_free(as);
+        return SDL_APP_FAILURE;
+    }
+
     //Create window first
-    as->window = SDL_CreateWindow(APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    as->window = SDL_CreateWindow(APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_FLAGS);
     if (!as->window) {
         printf("Failed to create window: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
+#ifndef WHY_BADGE
     // Check display capabilities
     SDL_DisplayID display = SDL_GetDisplayForWindow(as->window);
     SDL_DisplayMode const *current_mode = SDL_GetCurrentDisplayMode(display);
@@ -316,6 +333,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
             SDL_GetPixelFormatName(current_mode->format)
         );
     }
+#endif
 
     // Create renderer
     as->renderer = SDL_CreateRenderer(as->window, NULL);
@@ -325,6 +343,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     }
 
     // Check renderer properties
+#ifndef WHY_BADGE
     SDL_PropertiesID props = SDL_GetRendererProperties(as->renderer);
     if (props) {
         char const *name = SDL_GetStringProperty(props, SDL_PROP_RENDERER_NAME_STRING, "Unknown");
@@ -340,6 +359,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
             }
         }
     }
+#endif
 
     as->framebuffer = SDL_CreateTexture(
         as->renderer,
