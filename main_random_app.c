@@ -266,10 +266,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
         case SDL_EVENT_QUIT: return SDL_APP_SUCCESS;
         case SDL_EVENT_JOYSTICK_ADDED:
             if (joystick == NULL) {
+#ifndef WHY_BADGE
                 joystick = SDL_OpenJoystick(event->jdevice.which);
                 if (!joystick) {
                     printf("Failed to open joystick ID %u: %s", (unsigned int) event->jdevice.which, SDL_GetError());
                 }
+#endif
             }
             break;
         case SDL_EVENT_JOYSTICK_REMOVED:
@@ -320,7 +322,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         return SDL_APP_FAILURE;
     }
 
-#ifndef WHY_BADGE
     // Check display capabilities
     SDL_DisplayID display = SDL_GetDisplayForWindow(as->window);
     SDL_DisplayMode const *current_mode = SDL_GetCurrentDisplayMode(display);
@@ -333,7 +334,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
             SDL_GetPixelFormatName(current_mode->format)
         );
     }
-#endif
 
     // Create renderer
     as->renderer = SDL_CreateRenderer(as->window, NULL);
@@ -343,7 +343,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     }
 
     // Check renderer properties
-#ifndef WHY_BADGE
     SDL_PropertiesID props = SDL_GetRendererProperties(as->renderer);
     if (props) {
         char const *name = SDL_GetStringProperty(props, SDL_PROP_RENDERER_NAME_STRING, "Unknown");
@@ -359,7 +358,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
             }
         }
     }
-#endif
 
     as->framebuffer = SDL_CreateTexture(
         as->renderer,
