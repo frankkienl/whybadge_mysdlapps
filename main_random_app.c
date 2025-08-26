@@ -2,9 +2,9 @@
 // Created by FrankkieNL on 23/08/2025.
 //
 
-//#define WHY_BADGE 1
+//#define WHY_BADGE 1 // CAN BE SET IN THE CMAKE FILE
 
-//#include "font.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -52,7 +52,13 @@ typedef enum {
 } RandomAppScreens;
 
 typedef struct {
+    bool showWelcomeScreenDesc;
+    Uint64 welcomeScreenDescLastChange;
+} WelcomeScreenContext;
+
+typedef struct {
     int currentScreen;
+    WelcomeScreenContext welcomeScreenCtx;
 } RandomAppContext;
 
 typedef struct {
@@ -168,14 +174,31 @@ void draw_3d_border(AppState *ctx, int x, int y, int w, int h, int inset) {
 }
 
 
-static SDL_AppResult handle_key_event_(AppState *appstate, SDL_Scancode key_code) {
+static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
     printf("handle_key_event_\n");
-    switch (key_code) {
-        /* Quit. */
-        case SDL_SCANCODE_ESCAPE:
-        case SDL_SCANCODE_Q: return SDL_APP_SUCCESS;
-        default: break;
+    if (ctx->appCtx->currentScreen != KEYBOARD_SCREEN) {
+        switch (key_code) {
+            /* Quit. */
+            case SDL_SCANCODE_ESCAPE:
+            case SDL_SCANCODE_Q: return SDL_APP_SUCCESS;
+            default: break;
+        }
     }
+
+    if (ctx->appCtx->currentScreen == WELCOME_SCREEN) {
+        // Any key to continue
+        ctx->appCtx->currentScreen = ABOUT_SCREEN;
+        return SDL_APP_CONTINUE;
+    }
+
+    if (ctx->appCtx->currentScreen == ABOUT_SCREEN) {
+        // Any key to continue
+        ctx->appCtx->currentScreen = WELCOME_SCREEN;
+        // Force redraw
+        ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange = 0;
+        return SDL_APP_CONTINUE;
+    }
+
     return SDL_APP_CONTINUE;
 }
 
@@ -192,28 +215,56 @@ static SDL_AppResult handle_hat_event_(AppState *appstate, Uint8 hat_value) {
 }
 
 void welcome_screen_logic(AppState *ctx) {
-    int window_x = 30;
-    int window_y = 30;
-    int window_w = WINDOW_WIDTH - 60;
-    int window_h = WINDOW_HEIGHT - 60;
+    if (ctx->appCtx->currentScreen != WELCOME_SCREEN) {
+        return;
+    }
+
+    // Don't render screen if nothing changed.
+    bool shouldRender = false;
+    //First time here?
+    if (ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange == 0) {
+        //Then initialize
+        ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange = SDL_GetTicks();
+        ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc = true;
+        shouldRender = true; //repaint
+    }
+
+    const int blink_interval = 500; // milliseconds
+    const Uint64 now = SDL_GetTicks();
+    if (now - ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange >= blink_interval) {
+        ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc = !ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc;
+        ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange = now;
+        shouldRender = true; //repaint
+    }
+
+    if (!shouldRender) {
+        return;
+    }
+
+    const int window_x = 30;
+    const int window_y = 30;
+    const int window_w = WINDOW_WIDTH - 60;
+    const int window_h = WINDOW_HEIGHT - 60;
 
     draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
 
     draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
     draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
 
-    int title_h = 45;
+    const int title_h = 45;
     draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App", CDE_SELECTED_TEXT);
+    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Welcome", CDE_SELECTED_TEXT);
 
-    int content_y = window_y + window_h / 2 - 120;
+    int content_y = window_y + window_h / 2 ;
 
-    int icon_size = 80;
-    int icon_x = window_x + (window_w - icon_size) / 2;
-    int icon_y = content_y;
-
-    content_y += icon_size + 40;
-    draw_text_centered(ctx, window_x, content_y, window_w, "Press any key to continue...", CDE_TEXT_COLOR);
+    if (ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc) {
+        draw_text_centered(ctx, window_x, content_y, window_w, "Press any key to continue...", CDE_TEXT_COLOR);
+    }
+    // Render everything
+    SDL_RenderClear(ctx->renderer);
+    SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
+    SDL_RenderTexture(ctx->renderer, ctx->framebuffer, NULL, NULL);
+    SDL_RenderPresent(ctx->renderer);
 }
 
 void menu_screen_logic(AppState *appstate) {
@@ -225,7 +276,55 @@ void files_screen_logic(AppState *appstate) {
 void keyboard_screen_logic(AppState *appstate) {
 }
 
-void about_screen_logic(AppState *appstate) {
+void about_screen_logic(AppState *ctx) {
+    if (ctx->appCtx->currentScreen != ABOUT_SCREEN) {
+        return;
+    }
+    // Don't render screen if nothing changed.
+    bool shouldRender = true;
+
+    if (!shouldRender) {
+        return;
+    }
+
+    const int window_x = 30;
+    const int window_y = 30;
+    const int window_w = WINDOW_WIDTH - 60;
+    const int window_h = WINDOW_HEIGHT - 60;
+
+    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+
+    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+
+    const int title_h = 45;
+    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - About", CDE_SELECTED_TEXT);
+
+    int content_y = 120;
+
+    char const *lines[] = {
+        "RandomApp is a simple demo application",
+        "showcasing SDL3 features on the WHY Badge.",
+        "",
+        "Created by FrankkieNL, 2025.",
+        "Version:",
+        APP_VERSION,
+        "",
+        "Visit https://badge.why2025.org for more info.",
+        "",
+        "Press any key to return.",
+    };
+    for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
+        draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
+        content_y += FONT_HEIGHT + 8;
+    }
+
+    // Render everything
+    SDL_RenderClear(ctx->renderer);
+    SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
+    SDL_RenderTexture(ctx->renderer, ctx->framebuffer, NULL, NULL);
+    SDL_RenderPresent(ctx->renderer);
 }
 
 
@@ -234,8 +333,6 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     AppState *as = (AppState *) appstate;
     RandomAppContext *ctx = as->appCtx;
     Uint64 const now = SDL_GetTicks();
-
-    SDL_RenderClear(as->renderer);
 
     switch (ctx->currentScreen) {
         case WELCOME_SCREEN: welcome_screen_logic(appstate);
@@ -250,10 +347,6 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
             break;
         default: break;
     }
-
-    SDL_UpdateTexture(as->framebuffer, NULL, as->pixels, WINDOW_WIDTH * sizeof(Uint16));
-    SDL_RenderTexture(as->renderer, as->framebuffer, NULL, NULL);
-    SDL_RenderPresent(as->renderer);
 
     return SDL_APP_CONTINUE;
 }
