@@ -15,6 +15,11 @@
 #include "font.h"
 #include "stdlib.h"
 
+#ifdef WHY_BADGE
+#include "badgevms/device.h" // needed for orientation sensor
+#include "sys/unistd.h" // needed for sleep
+#endif
+
 #define WINDOW_WIDTH     720
 #define WINDOW_HEIGHT    720
 #ifdef WHY_BADGE
@@ -95,6 +100,7 @@ typedef struct {
 typedef struct {
     bool shouldRepaint;
     Uint16 lastChange;
+    void *orientationSensor;
 } SensorsScreenContext;
 
 typedef struct {
@@ -277,7 +283,7 @@ void menu_screen_logic(AppState *ctx) {
         const MenuScreenOption_t items[MENU_COUNT] = {
             {"Keyboard test", "1.0", "Check keyboard scancodes"},
             {"File explorer", "0.1", "Read files and directories"},
-            {"Sensors", "0.1", "Read sensor data"},
+            {"Sensors", "1.0", "Read sensor data"},
             {"About", "1.0", "About this app"}
         };
         ctx->appCtx->menuScreenCtx->menu_options[0] = items[0];
@@ -336,7 +342,8 @@ void menu_screen_logic(AppState *ctx) {
         draw_text_bold(ctx, item_x + 8, item_y + 6, ctx->appCtx->menuScreenCtx->menu_options[i].name, text_color);
 
         char version_text[64];
-        snprintf(version_text, sizeof(version_text), "Version: %s", ctx->appCtx->menuScreenCtx->menu_options[i].version);
+        snprintf(version_text, sizeof(version_text), "Version: %s",
+                 ctx->appCtx->menuScreenCtx->menu_options[i].version);
         draw_text(ctx, item_x + 8, item_y + 30, version_text, text_color);
 
         char desc[60] = {0};
@@ -529,7 +536,8 @@ void keyboard_screen_logic(AppState *ctx) {
     int content_y = 120;
 
     char latestScanCodeAsString[128];
-    snprintf(latestScanCodeAsString, sizeof(latestScanCodeAsString), "0x%02X", ctx->appCtx->keyboardScreenCtx->latestScancode);
+    snprintf(latestScanCodeAsString, sizeof(latestScanCodeAsString), "0x%02X",
+             ctx->appCtx->keyboardScreenCtx->latestScancode);
 
     char const *lines[] = {
         "Keyboard test",
@@ -631,11 +639,29 @@ void sensors_screen_logic(AppState *ctx) {
 
     int content_y = 120;
 
+#ifdef WHY_BADGE
+    char sensor1[128];
+    char sensor2[128];
+    if (ctx->appCtx->sensorsScreenCtx->orientationSensor != NULL) {
+        orientation_device_t *orientation_device = ctx->appCtx->sensorsScreenCtx->orientationSensor;
+        snprintf(sensor1, sizeof(sensor1), "orientation: %d", orientation_device->_get_orientation(orientation_device));
+        snprintf(sensor2, sizeof(sensor2), "orientation degress: %d", orientation_device->_get_orientation_degrees(orientation_device));
+    }
     char const *lines[] = {
         "Sensors screen",
-        "TODO",
+        sensor1,
+        sensor2,
         "Press any key to return.",
     };
+#else
+    char const *lines[] = {
+        "Sensors screen",
+        "No sensors found, ",
+        "as this is not a WHY Badge build of this app",
+        "Press any key to return.",
+    };
+#endif
+
     for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
         draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
         content_y += FONT_HEIGHT + 8;
@@ -879,6 +905,22 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         SDL_free(as);
         return SDL_APP_FAILURE;
     }
+
+#ifdef WHY_BADGE
+    sleep(5);
+    orientation_device_t *orientation;
+    orientation = (orientation_device_t *)device_get("ORIENTATION0");
+    as->appCtx->sensorsScreenCtx->orientationSensor = orientation;
+    if (orientation == NULL) {
+        printf("Well, no device found");
+    } else {
+        printf("Get BMI270 accel...\n");
+        int ret = orientation->_get_orientation(orientation);
+        printf("Orientation: %d \n", ret);
+        int degrees = orientation->_get_orientation_degrees(orientation);
+        printf("Orientation degrees: %d \n", degrees);
+    }
+#endif
 
     return SDL_APP_CONTINUE;
 }
