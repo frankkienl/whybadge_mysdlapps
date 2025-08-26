@@ -13,6 +13,7 @@
 #include <SDL3/SDL_main.h>
 
 #include "font.h"
+#include "stdlib.h"
 
 #define WINDOW_WIDTH     720
 #define WINDOW_HEIGHT    720
@@ -53,12 +54,33 @@ typedef enum {
 
 typedef struct {
     bool showWelcomeScreenDesc;
-    Uint64 welcomeScreenDescLastChange;
+    Uint64 lastChange;
 } WelcomeScreenContext;
 
 typedef struct {
+    char *name;
+    char *version;
+    char *description;
+} MenuScreenOption_t;
+
+typedef enum {
+    MENU_FILES, MENU_KEYS, MENU_ABOUT, MENU_COUNT
+} MenuScreenOptions;
+
+typedef struct {
+    int scroll_offset;
+    int selected_item;
+    int total_items;
+    int items_per_page;
+    MenuScreenOption_t menu_options[MENU_COUNT];
+    bool shouldRepaint;
+    Uint16 lastChange;
+} MenuScreenContext;
+
+typedef struct {
     int currentScreen;
-    WelcomeScreenContext welcomeScreenCtx;
+    WelcomeScreenContext *welcomeScreenCtx;
+    MenuScreenContext *menuScreenCtx;
 } RandomAppContext;
 
 typedef struct {
@@ -85,7 +107,6 @@ static inline Uint16 rgb888_to_rgb565(Uint32 rgb888) {
     Uint8 b = rgb888 & 0xFF;
     return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
-
 
 void draw_rect(AppState *ctx, int x, int y, int w, int h, Uint32 color) {
     Uint16 rgb565 = rgb888_to_rgb565(color);
@@ -173,47 +194,6 @@ void draw_3d_border(AppState *ctx, int x, int y, int w, int h, int inset) {
     draw_rect(ctx, x + w - 3, y, 3, h, dark_color);
 }
 
-
-static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
-    printf("handle_key_event_\n");
-    if (ctx->appCtx->currentScreen != KEYBOARD_SCREEN) {
-        switch (key_code) {
-            /* Quit. */
-            case SDL_SCANCODE_ESCAPE:
-            case SDL_SCANCODE_Q: return SDL_APP_SUCCESS;
-            default: break;
-        }
-    }
-
-    if (ctx->appCtx->currentScreen == WELCOME_SCREEN) {
-        // Any key to continue
-        ctx->appCtx->currentScreen = ABOUT_SCREEN;
-        return SDL_APP_CONTINUE;
-    }
-
-    if (ctx->appCtx->currentScreen == ABOUT_SCREEN) {
-        // Any key to continue
-        ctx->appCtx->currentScreen = WELCOME_SCREEN;
-        // Force redraw
-        ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange = 0;
-        return SDL_APP_CONTINUE;
-    }
-
-    return SDL_APP_CONTINUE;
-}
-
-static SDL_AppResult handle_hat_event_(AppState *appstate, Uint8 hat_value) {
-    printf("handle_hat_event_\n");
-    switch (hat_value) {
-        case SDL_HAT_UP: /* Up */ break;
-        case SDL_HAT_RIGHT: /* Right */ break;
-        case SDL_HAT_DOWN: /* Down */ break;
-        case SDL_HAT_LEFT: /* Left */ break;
-        default: break;
-    }
-    return SDL_APP_CONTINUE;
-}
-
 void welcome_screen_logic(AppState *ctx) {
     if (ctx->appCtx->currentScreen != WELCOME_SCREEN) {
         return;
@@ -222,18 +202,18 @@ void welcome_screen_logic(AppState *ctx) {
     // Don't render screen if nothing changed.
     bool shouldRender = false;
     //First time here?
-    if (ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange == 0) {
+    if (ctx->appCtx->welcomeScreenCtx->lastChange == 0) {
         //Then initialize
-        ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange = SDL_GetTicks();
-        ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc = true;
+        ctx->appCtx->welcomeScreenCtx->lastChange = SDL_GetTicks();
+        ctx->appCtx->welcomeScreenCtx->showWelcomeScreenDesc = true;
         shouldRender = true; //repaint
     }
 
     const int blink_interval = 500; // milliseconds
     const Uint64 now = SDL_GetTicks();
-    if (now - ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange >= blink_interval) {
-        ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc = !ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc;
-        ctx->appCtx->welcomeScreenCtx.welcomeScreenDescLastChange = now;
+    if (now - ctx->appCtx->welcomeScreenCtx->lastChange >= blink_interval) {
+        ctx->appCtx->welcomeScreenCtx->showWelcomeScreenDesc = !ctx->appCtx->welcomeScreenCtx->showWelcomeScreenDesc;
+        ctx->appCtx->welcomeScreenCtx->lastChange = now;
         shouldRender = true; //repaint
     }
 
@@ -255,9 +235,9 @@ void welcome_screen_logic(AppState *ctx) {
     draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
     draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Welcome", CDE_SELECTED_TEXT);
 
-    int content_y = window_y + window_h / 2 ;
+    int content_y = window_y + window_h / 2;
 
-    if (ctx->appCtx->welcomeScreenCtx.showWelcomeScreenDesc) {
+    if (ctx->appCtx->welcomeScreenCtx->showWelcomeScreenDesc) {
         draw_text_centered(ctx, window_x, content_y, window_w, "Press any key to continue...", CDE_TEXT_COLOR);
     }
     // Render everything
@@ -267,7 +247,177 @@ void welcome_screen_logic(AppState *ctx) {
     SDL_RenderPresent(ctx->renderer);
 }
 
-void menu_screen_logic(AppState *appstate) {
+void menu_screen_logic(AppState *ctx) {
+    if (ctx->appCtx->menuScreenCtx->total_items == 0) {
+        ctx->appCtx->menuScreenCtx->total_items = MENU_COUNT;
+        // Fill menu
+        const MenuScreenOption_t items[MENU_COUNT] = {
+            {"Keyboard test", "1.0", "Check keyboard scancodes"},
+            {"File explorer", "1.0", "Read files and directories"},
+            {"About", "1.0", "About this app"}
+        };
+        ctx->appCtx->menuScreenCtx->menu_options[0] = items[0];
+        ctx->appCtx->menuScreenCtx->menu_options[1] = items[1];
+        ctx->appCtx->menuScreenCtx->menu_options[2] = items[2];
+        ctx->appCtx->menuScreenCtx->shouldRepaint = true;
+    }
+
+    if (!ctx->appCtx->menuScreenCtx->shouldRepaint) {
+        return;
+    }
+
+    int window_x = 30;
+    int window_y = 30;
+    int window_w = WINDOW_WIDTH - 60;
+    int window_h = WINDOW_HEIGHT - 60;
+
+    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+
+    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+
+    int title_h = 45;
+    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Menu", CDE_SELECTED_TEXT);
+
+    char count_text[64];
+    snprintf(count_text, sizeof(count_text), "Menu Options Available: %d", ctx->appCtx->menuScreenCtx->total_items);
+    draw_text(ctx, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
+
+    int list_y = window_y + title_h + 55;
+    int list_h = window_h - title_h - 110;
+    int item_height = 80;
+
+    draw_rect(ctx, window_x + 15, list_y, window_w - 30, list_h, 0xFFFFFF);
+    draw_3d_border(ctx, window_x + 15, list_y, window_w - 30, list_h, 1);
+
+    ctx->appCtx->menuScreenCtx->items_per_page = (list_h - 6) / item_height;
+    int visible_start = ctx->appCtx->menuScreenCtx->scroll_offset;
+    int visible_end = visible_start + ctx->appCtx->menuScreenCtx->items_per_page;
+    if (visible_end > ctx->appCtx->menuScreenCtx->total_items)
+        visible_end = ctx->appCtx->menuScreenCtx->total_items;
+
+    for (int i = visible_start; i < visible_end; i++) {
+        int item_y = list_y + 3 + (i - visible_start) * item_height;
+        int item_x = window_x + 18;
+        int item_w = window_w - 36;
+
+        if (i == ctx->appCtx->menuScreenCtx->selected_item) {
+            draw_rect(ctx, item_x, item_y, item_w, item_height - 2, CDE_SELECTED_BG);
+        }
+
+        Uint32 text_color = (i == ctx->appCtx->menuScreenCtx->selected_item) ? CDE_SELECTED_TEXT : CDE_TEXT_COLOR;
+
+        draw_text_bold(ctx, item_x + 8, item_y + 6, ctx->appCtx->menuScreenCtx->menu_options[i].name, text_color);
+
+        char version_text[64];
+        snprintf(version_text, sizeof(version_text), "Version: %s", ctx->appCtx->menuScreenCtx->menu_options[i].version);
+        draw_text(ctx, item_x + 8, item_y + 30, version_text, text_color);
+
+        char desc[60] = {0};
+        int max_desc_chars = (item_w - 16) / FONT_WIDTH;
+        if (max_desc_chars > 59)
+            max_desc_chars = 59;
+        if (ctx->appCtx->menuScreenCtx->menu_options[i].description) {
+            strncpy(desc, ctx->appCtx->menuScreenCtx->menu_options[i].description, max_desc_chars);
+            desc[max_desc_chars] = '\0';
+            if (strlen(ctx->appCtx->menuScreenCtx->menu_options[i].description) > max_desc_chars) {
+                desc[max_desc_chars - 3] = '.';
+                desc[max_desc_chars - 2] = '.';
+                desc[max_desc_chars - 1] = '.';
+            }
+        }
+        draw_text(ctx, item_x + 8, item_y + 54, desc, text_color);
+
+        if (i < visible_end - 1) {
+            draw_rect(ctx, item_x, item_y + item_height - 2, item_w, 1, CDE_BORDER_DARK);
+        }
+    }
+
+    if (ctx->appCtx->menuScreenCtx->total_items > ctx->appCtx->menuScreenCtx->items_per_page) {
+        int scrollbar_x = window_x + window_w - 35;
+        int scrollbar_y = list_y + 3;
+        int scrollbar_h = list_h - 6;
+
+        draw_rect(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, CDE_BUTTON_COLOR);
+        draw_3d_border(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, 1);
+
+        int thumb_h = (scrollbar_h * ctx->appCtx->menuScreenCtx->items_per_page) / ctx->appCtx->menuScreenCtx->
+                      total_items;
+        if (thumb_h < 30)
+            thumb_h = 30; // Minimum thumb size
+        int thumb_y = scrollbar_y;
+        if (ctx->appCtx->menuScreenCtx->total_items > ctx->appCtx->menuScreenCtx->items_per_page) {
+            thumb_y += ((scrollbar_h - thumb_h) * ctx->appCtx->menuScreenCtx->scroll_offset) / (
+                ctx->appCtx->menuScreenCtx->total_items - ctx->appCtx->menuScreenCtx->items_per_page);
+        }
+
+        draw_rect(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, CDE_PANEL_COLOR);
+        draw_3d_border(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, 0);
+    }
+
+    draw_text(
+        ctx,
+        window_x + 15,
+        window_y + window_h - 35,
+        "UP/DOWN to navigate, SPACE to open, ESC to exit",
+        CDE_TEXT_COLOR
+    );
+
+    // Render everything
+    SDL_RenderClear(ctx->renderer);
+    SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
+    SDL_RenderTexture(ctx->renderer, ctx->framebuffer, NULL, NULL);
+    SDL_RenderPresent(ctx->renderer);
+}
+
+void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
+    if (as->appCtx->currentScreen != MENU_SCREEN) {
+        return;
+    }
+    as->appCtx->menuScreenCtx->shouldRepaint = true;
+    MenuScreenContext *ctx = as->appCtx->menuScreenCtx;
+    switch (key_code) {
+        case SDL_SCANCODE_UP:
+            if (ctx->selected_item > 0) {
+                ctx->selected_item--;
+                if (ctx->selected_item < ctx->scroll_offset) {
+                    ctx->scroll_offset = ctx->selected_item;
+                }
+            }
+            printf("menu_screen_handle_key; (up) selected_item: %d\n", ctx->selected_item);
+            break;
+
+        case SDL_SCANCODE_DOWN:
+            if (ctx->selected_item < ctx->total_items - 1) {
+                ctx->selected_item++;
+                if (ctx->selected_item >= ctx->scroll_offset + ctx->items_per_page) {
+                    ctx->scroll_offset = ctx->selected_item - ctx->items_per_page + 1;
+                }
+            }
+            printf("menu_screen_handle_key; (down) selected_item: %d\n", ctx->selected_item);
+            break;
+
+        case SDL_SCANCODE_RETURN:
+        case SDL_SCANCODE_SPACE:
+            printf("menu_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
+            switch (ctx->selected_item) {
+                case MENU_KEYS: {
+                    as->appCtx->currentScreen = KEYBOARD_SCREEN;
+                    break;
+                }
+                case MENU_FILES: {
+                    as->appCtx->currentScreen = FILES_SCREEN;
+                    break;
+                }
+                case MENU_ABOUT: {
+                    as->appCtx->currentScreen = ABOUT_SCREEN;
+                    break;
+                }
+                default: break;
+            }
+        default: break;
+    }
 }
 
 void files_screen_logic(AppState *appstate) {
@@ -327,6 +477,50 @@ void about_screen_logic(AppState *ctx) {
     SDL_RenderPresent(ctx->renderer);
 }
 
+static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
+    printf("handle_key_event_\n");
+    if (ctx->appCtx->currentScreen != KEYBOARD_SCREEN) {
+        switch (key_code) {
+            /* Quit. */
+            case SDL_SCANCODE_ESCAPE:
+            case SDL_SCANCODE_Q: return SDL_APP_SUCCESS;
+            default: break;
+        }
+    }
+
+    if (ctx->appCtx->currentScreen == WELCOME_SCREEN) {
+        // Any key to continue
+        ctx->appCtx->currentScreen = MENU_SCREEN;
+        return SDL_APP_CONTINUE;
+    }
+
+    if (ctx->appCtx->currentScreen == MENU_SCREEN) {
+        menu_screen_handle_key(ctx, key_code);
+        return SDL_APP_CONTINUE;
+    }
+
+    if (ctx->appCtx->currentScreen == ABOUT_SCREEN) {
+        // Any key to continue
+        ctx->appCtx->currentScreen = MENU_SCREEN;
+        // Force redraw
+        ctx->appCtx->welcomeScreenCtx->lastChange = 0;
+        return SDL_APP_CONTINUE;
+    }
+
+    return SDL_APP_CONTINUE;
+}
+
+static SDL_AppResult handle_hat_event_(AppState *appstate, Uint8 hat_value) {
+    printf("handle_hat_event_\n");
+    switch (hat_value) {
+        case SDL_HAT_UP: /* Up */ break;
+        case SDL_HAT_RIGHT: /* Right */ break;
+        case SDL_HAT_DOWN: /* Down */ break;
+        case SDL_HAT_LEFT: /* Left */ break;
+        default: break;
+    }
+    return SDL_APP_CONTINUE;
+}
 
 SDL_AppResult SDL_AppIterate(void *appstate) {
     //printf("SDL_AppIterate\n");
@@ -407,6 +601,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         SDL_free(as);
         return SDL_APP_FAILURE;
     }
+    as->appCtx->currentScreen = WELCOME_SCREEN;
+
+    as->appCtx->welcomeScreenCtx = (WelcomeScreenContext *) SDL_calloc(1, sizeof(WelcomeScreenContext));
+    as->appCtx->menuScreenCtx = (MenuScreenContext *) SDL_calloc(1, sizeof(MenuScreenContext));
 
     //Create window first
     as->window = SDL_CreateWindow(APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_FLAGS);
@@ -487,6 +685,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     }
     if (appstate != NULL) {
         AppState *as = (AppState *) appstate;
+        SDL_free(as->appCtx->menuScreenCtx);
+        SDL_free(as->appCtx->welcomeScreenCtx);
+        SDL_free(as->appCtx);
         SDL_free(as->pixels);
         SDL_DestroyTexture(as->framebuffer);
         SDL_DestroyRenderer(as->renderer);
