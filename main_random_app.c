@@ -47,8 +47,9 @@ static SDL_Joystick *joystick = NULL;
 typedef enum {
     WELCOME_SCREEN,
     MENU_SCREEN,
-    FILES_SCREEN,
     KEYBOARD_SCREEN,
+    FILES_SCREEN,
+    SENSORS_SCREEN,
     ABOUT_SCREEN
 } RandomAppScreens;
 
@@ -64,7 +65,7 @@ typedef struct {
 } MenuScreenOption_t;
 
 typedef enum {
-    MENU_KEYS, MENU_FILES, MENU_ABOUT, MENU_COUNT
+    MENU_KEYS, MENU_FILES, MENU_SENSORS, MENU_ABOUT, MENU_COUNT
 } MenuScreenOptions;
 
 typedef struct {
@@ -92,11 +93,17 @@ typedef struct {
 } KeyboardScreenContext;
 
 typedef struct {
+    bool shouldRepaint;
+    Uint16 lastChange;
+} SensorsScreenContext;
+
+typedef struct {
     int currentScreen;
     WelcomeScreenContext *welcomeScreenCtx;
     MenuScreenContext *menuScreenCtx;
-    FilesScreenContext *filesScreenCtx;
     KeyboardScreenContext *keyboardScreenCtx;
+    FilesScreenContext *filesScreenCtx;
+    SensorsScreenContext *sensorsScreenCtx;
 } RandomAppContext;
 
 typedef struct {
@@ -269,12 +276,14 @@ void menu_screen_logic(AppState *ctx) {
         // Fill menu
         const MenuScreenOption_t items[MENU_COUNT] = {
             {"Keyboard test", "1.0", "Check keyboard scancodes"},
-            {"File explorer", "1.0", "Read files and directories"},
+            {"File explorer", "0.1", "Read files and directories"},
+            {"Sensors", "0.1", "Read sensor data"},
             {"About", "1.0", "About this app"}
         };
         ctx->appCtx->menuScreenCtx->menu_options[0] = items[0];
         ctx->appCtx->menuScreenCtx->menu_options[1] = items[1];
         ctx->appCtx->menuScreenCtx->menu_options[2] = items[2];
+        ctx->appCtx->menuScreenCtx->menu_options[3] = items[3];
         ctx->appCtx->menuScreenCtx->shouldRepaint = true;
     }
 
@@ -426,6 +435,10 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                     as->appCtx->currentScreen = FILES_SCREEN;
                     break;
                 }
+                case MENU_SENSORS: {
+                    as->appCtx->currentScreen = SENSORS_SCREEN;
+                    break;
+                }
                 case MENU_ABOUT: {
                     as->appCtx->currentScreen = ABOUT_SCREEN;
                     break;
@@ -436,7 +449,49 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
     }
 }
 
-void files_screen_logic(AppState *appstate) {
+void files_screen_logic(AppState *ctx) {
+    if (ctx->appCtx->currentScreen != FILES_SCREEN) {
+        return;
+    }
+    // Don't render screen if nothing changed.
+    bool shouldRender = true;
+
+    if (!shouldRender) {
+        return;
+    }
+
+    const int window_x = 30;
+    const int window_y = 30;
+    const int window_w = WINDOW_WIDTH - 60;
+    const int window_h = WINDOW_HEIGHT - 60;
+
+    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+
+    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+
+    const int title_h = 45;
+    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - About", CDE_SELECTED_TEXT);
+
+    int content_y = 120;
+
+    char const *lines[] = {
+        "File Explorer",
+        "TODO",
+        "",
+        "Press any key to return.",
+    };
+    for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
+        draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
+        content_y += FONT_HEIGHT + 8;
+    }
+
+    // Render everything
+    SDL_RenderClear(ctx->renderer);
+    SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
+    SDL_RenderTexture(ctx->renderer, ctx->framebuffer, NULL, NULL);
+    SDL_RenderPresent(ctx->renderer);
 }
 
 void keyboard_screen_logic(AppState *ctx) {
@@ -549,6 +604,50 @@ void about_screen_logic(AppState *ctx) {
     SDL_RenderPresent(ctx->renderer);
 }
 
+void sensors_screen_logic(AppState *ctx) {
+    if (ctx->appCtx->currentScreen != SENSORS_SCREEN) {
+        return;
+    }
+    // Don't render screen if nothing changed.
+    bool shouldRender = true;
+
+    if (!shouldRender) {
+        return;
+    }
+
+    const int window_x = 30;
+    const int window_y = 30;
+    const int window_w = WINDOW_WIDTH - 60;
+    const int window_h = WINDOW_HEIGHT - 60;
+
+    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+
+    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+
+    const int title_h = 45;
+    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - About", CDE_SELECTED_TEXT);
+
+    int content_y = 120;
+
+    char const *lines[] = {
+        "Sensors screen",
+        "TODO",
+        "Press any key to return.",
+    };
+    for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
+        draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
+        content_y += FONT_HEIGHT + 8;
+    }
+
+    // Render everything
+    SDL_RenderClear(ctx->renderer);
+    SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
+    SDL_RenderTexture(ctx->renderer, ctx->framebuffer, NULL, NULL);
+    SDL_RenderPresent(ctx->renderer);
+}
+
 static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
     printf("handle_key_event_\n");
     if (ctx->appCtx->currentScreen != KEYBOARD_SCREEN) {
@@ -592,6 +691,22 @@ static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
         return SDL_APP_CONTINUE;
     }
 
+    if (ctx->appCtx->currentScreen == SENSORS_SCREEN) {
+        // Any key to continue
+        ctx->appCtx->currentScreen = MENU_SCREEN;
+        // Force redraw
+        ctx->appCtx->welcomeScreenCtx->lastChange = 0;
+        return SDL_APP_CONTINUE;
+    }
+
+    if (ctx->appCtx->currentScreen == FILES_SCREEN) {
+        // Any key to continue
+        ctx->appCtx->currentScreen = MENU_SCREEN;
+        // Force redraw
+        ctx->appCtx->welcomeScreenCtx->lastChange = 0;
+        return SDL_APP_CONTINUE;
+    }
+
     return SDL_APP_CONTINUE;
 }
 
@@ -618,9 +733,11 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
             break;
         case MENU_SCREEN: menu_screen_logic(appstate);
             break;
+        case KEYBOARD_SCREEN: keyboard_screen_logic(appstate);
+            break;
         case FILES_SCREEN: files_screen_logic(appstate);
             break;
-        case KEYBOARD_SCREEN: keyboard_screen_logic(appstate);
+        case SENSORS_SCREEN: sensors_screen_logic(appstate);
             break;
         case ABOUT_SCREEN: about_screen_logic(appstate);
             break;
@@ -692,7 +809,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     as->appCtx->menuScreenCtx = (MenuScreenContext *) SDL_calloc(1, sizeof(MenuScreenContext));
     as->appCtx->filesScreenCtx = (FilesScreenContext *) SDL_calloc(1, sizeof(FilesScreenContext));
     as->appCtx->keyboardScreenCtx = (KeyboardScreenContext *) SDL_calloc(1, sizeof(KeyboardScreenContext));
-
+    as->appCtx->sensorsScreenCtx = (SensorsScreenContext *) SDL_calloc(1, sizeof(SensorsScreenContext));
 
     //Create window first
     as->window = SDL_CreateWindow(APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_FLAGS);
@@ -774,6 +891,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     if (appstate != NULL) {
         AppState *as = (AppState *) appstate;
         SDL_free(as->appCtx->keyboardScreenCtx);
+        SDL_free(as->appCtx->sensorsScreenCtx);
         SDL_free(as->appCtx->filesScreenCtx);
         SDL_free(as->appCtx->menuScreenCtx);
         SDL_free(as->appCtx->welcomeScreenCtx);
