@@ -654,10 +654,10 @@ void sensors_screen_logic(AppState *ctx) {
     char sensor6[128];
     if (ctx->appCtx->sensorsScreenCtx->gasSensor != NULL) {
         gas_device_t *gas = ctx->appCtx->sensorsScreenCtx->gasSensor;
-        snprintf(sensor3, sizeof(sensor3),"Temperature in Celsius: %d \n", gas->_get_temperature(gas));
-        snprintf(sensor4, sizeof(sensor4),"Humidity in Rel. Percentage: %d \n", gas->_get_humidity(gas));
-        snprintf(sensor5, sizeof(sensor5),"Pressure in Pascal: %d \n", gas->_get_pressure(gas));
-        snprintf(sensor6, sizeof(sensor6),"Gas Resistance in Ohm: %d \n", gas->_get_gas_resistance(gas));
+        snprintf(sensor3, sizeof(sensor3),"Temperature in Celsius: %.2f \n", gas->_get_temperature(gas));
+        snprintf(sensor4, sizeof(sensor4),"Humidity in Rel. Percentage: %.2f \n", gas->_get_humidity(gas));
+        snprintf(sensor5, sizeof(sensor5),"Pressure in Pascal: %.2f \n", gas->_get_pressure(gas));
+        snprintf(sensor6, sizeof(sensor6),"Gas Resistance in Ohm: %.2f \n", gas->_get_gas_resistance(gas));
     }
     char const *lines[] = {
         "Sensors screen",
