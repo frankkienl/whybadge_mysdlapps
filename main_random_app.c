@@ -101,6 +101,7 @@ typedef struct {
     bool shouldRepaint;
     Uint16 lastChange;
     void *orientationSensor;
+    void *gasSensor;
 } SensorsScreenContext;
 
 typedef struct {
@@ -635,7 +636,7 @@ void sensors_screen_logic(AppState *ctx) {
 
     const int title_h = 45;
     draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - About", CDE_SELECTED_TEXT);
+    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Sensors", CDE_SELECTED_TEXT);
 
     int content_y = 120;
 
@@ -647,10 +648,30 @@ void sensors_screen_logic(AppState *ctx) {
         snprintf(sensor1, sizeof(sensor1), "orientation: %d", orientation_device->_get_orientation(orientation_device));
         snprintf(sensor2, sizeof(sensor2), "orientation degress: %d", orientation_device->_get_orientation_degrees(orientation_device));
     }
+    char sensor3[128];
+    char sensor4[128];
+    char sensor5[128];
+    char sensor6[128];
+    if (ctx->appCtx->sensorsScreenCtx->gasSensor != NULL) {
+        gas_device_t *gas = ctx->appCtx->sensorsScreenCtx->gasSensor;
+        snprintf(sensor3, sizeof(sensor3),"Temperature in Celsius: %d \n", gas->_get_temperature(gas));
+        snprintf(sensor4, sizeof(sensor4),"Humidity in Rel. Percentage: %d \n", gas->_get_humidity(gas));
+        snprintf(sensor5, sizeof(sensor5),"Pressure in Pascal: %d \n", gas->_get_pressure(gas));
+        snprintf(sensor6, sizeof(sensor6),"Gas Resistance in Ohm: %d \n", gas->_get_gas_resistance(gas));
+    }
     char const *lines[] = {
         "Sensors screen",
+        "",
+        "BMI 270 - Orientation sensor",
         sensor1,
         sensor2,
+        "",
+        "BME 690 - Gas sensor",
+        sensor3,
+        sensor4,
+        sensor5,
+        sensor6,
+        "",
         "Press any key to return.",
     };
 #else
@@ -907,7 +928,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     }
 
 #ifdef WHY_BADGE
-    sleep(5);
+    //sleep(5);
     orientation_device_t *orientation;
     orientation = (orientation_device_t *)device_get("ORIENTATION0");
     as->appCtx->sensorsScreenCtx->orientationSensor = orientation;
@@ -919,6 +940,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         printf("Orientation: %d \n", ret);
         int degrees = orientation->_get_orientation_degrees(orientation);
         printf("Orientation degrees: %d \n", degrees);
+    }
+
+    gas_device_t *gas;
+    gas = (gas_device_t *)device_get("GAS0");
+    as->appCtx->sensorsScreenCtx->gasSensor = gas;
+    if (gas == NULL) {
+        printf("Well, no device found");
+    } else {
+        printf("Get BME690...\n");
+        printf("Temperature in Celsius: %d \n", gas->_get_temperature(gas));
+        printf("Humidity in Rel. Percentage: %d \n", gas->_get_humidity(gas));
+        printf("Pressure in Pascal: %d \n", gas->_get_pressure(gas));
+        printf("Gas Resistance in Ohm: %d \n", gas->_get_gas_resistance(gas));
     }
 #endif
 
