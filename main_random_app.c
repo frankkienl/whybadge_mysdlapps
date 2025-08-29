@@ -468,6 +468,17 @@ void files_screen_logic(AppState *ctx) {
         return;
     }
 
+    /*
+     * Root folders
+     * SD0
+     * FLASH0
+     * APPS
+     * STORAGE
+     *
+     * Apps should be in:
+     * APPS:[BADGEVMS.APPS]
+     */
+
     const int window_x = 30;
     const int window_y = 30;
     const int window_w = WINDOW_WIDTH - 60;
