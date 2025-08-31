@@ -479,6 +479,20 @@ void files_screen_logic(AppState *ctx) {
      * APPS:[BADGEVMS.APPS]
      */
 
+#ifdef WHY_BADGE
+    char const *rootFolders[] = {
+        "SD0:",
+        "FLASH0:",
+        "APPS:",
+        "STORAGE:"
+    };
+#else
+    char const *rootFolders[] = {
+        "~/",
+        "/"
+    };
+# endif
+
     const int window_x = 30;
     const int window_y = 30;
     const int window_w = WINDOW_WIDTH - 60;
