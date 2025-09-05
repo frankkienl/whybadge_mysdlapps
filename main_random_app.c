@@ -11,6 +11,7 @@
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_filesystem.h>
 
 #include "font.h"
 #include "stdlib.h"
@@ -49,6 +50,16 @@
 
 static SDL_Joystick *joystick = NULL;
 
+static const char *pathtype_to_str(SDL_PathType t) {
+    switch (t) {
+        case SDL_PATHTYPE_FILE: return "FILE";
+        case SDL_PATHTYPE_DIRECTORY: return "DIR";
+        case SDL_PATHTYPE_OTHER: return "OTHER";
+        case SDL_PATHTYPE_NONE: return "MISSING";
+        default: return "?";
+    }
+}
+
 typedef enum {
     WELCOME_SCREEN,
     MENU_SCREEN,
@@ -84,6 +95,10 @@ typedef struct {
 } MenuScreenContext;
 
 typedef struct {
+    bool shouldRepaint;
+    Uint16 lastChange;
+    char *currentDirectory;
+    char **entries;
     int scroll_offset;
     int selected_item;
     int total_items;
@@ -131,10 +146,10 @@ static const struct {
     {SDL_PROP_APP_METADATA_TYPE_STRING, "tool"}
 };
 
-static inline Uint16 rgb888_to_rgb565(Uint32 rgb888) {
-    Uint8 r = (rgb888 >> 16) & 0xFF;
-    Uint8 g = (rgb888 >> 8) & 0xFF;
-    Uint8 b = rgb888 & 0xFF;
+static Uint16 rgb888_to_rgb565(const Uint32 rgb888) {
+    const Uint8 r = (rgb888 >> 16) & 0xFF;
+    const Uint8 g = (rgb888 >> 8) & 0xFF;
+    const Uint8 b = rgb888 & 0xFF;
     return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
 
@@ -170,8 +185,8 @@ void draw_char(AppState *ctx, int x, int y, char c, Uint32 color) {
     Uint16 rgb565 = rgb888_to_rgb565(color);
 
     for (int row = 0; row < FONT_HEIGHT; row++) {
-        uint16_t row_data = char_data[row];
-        int py = y + row;
+        const uint16_t row_data = char_data[row];
+        const int py = y + row;
 
         if (py < 0 || py >= WINDOW_HEIGHT)
             continue;
@@ -278,6 +293,9 @@ void welcome_screen_logic(AppState *ctx) {
 }
 
 void menu_screen_logic(AppState *ctx) {
+    if (ctx->appCtx->currentScreen != MENU_SCREEN) {
+        return;
+    }
     if (ctx->appCtx->menuScreenCtx->total_items == 0) {
         ctx->appCtx->menuScreenCtx->total_items = MENU_COUNT;
         // Fill menu
@@ -404,6 +422,42 @@ void menu_screen_logic(AppState *ctx) {
     SDL_RenderPresent(ctx->renderer);
 }
 
+void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
+    if (as->appCtx->currentScreen != FILES_SCREEN) {
+        return;
+    }
+
+    as->appCtx->filesScreenCtx->shouldRepaint = true;
+    FilesScreenContext *ctx = as->appCtx->filesScreenCtx;
+    switch (key_code) {
+        case SDL_SCANCODE_UP:
+            if (ctx->selected_item > 0) {
+                ctx->selected_item--;
+                if (ctx->selected_item < ctx->scroll_offset) {
+                    ctx->scroll_offset = ctx->selected_item;
+                }
+            }
+            printf("files_screen_handle_key; (up) selected_item: %d\n", ctx->selected_item);
+            break;
+
+        case SDL_SCANCODE_DOWN:
+            if (ctx->selected_item < ctx->total_items - 1) {
+                ctx->selected_item++;
+                if (ctx->selected_item >= ctx->scroll_offset + ctx->items_per_page) {
+                    ctx->scroll_offset = ctx->selected_item - ctx->items_per_page + 1;
+                }
+            }
+            printf("files_screen_handle_key; (down) selected_item: %d\n", ctx->selected_item);
+            break;
+
+        case SDL_SCANCODE_RETURN:
+        case SDL_SCANCODE_SPACE:
+            printf("files_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
+            break;
+        default: break;
+    }
+}
+
 void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
     if (as->appCtx->currentScreen != MENU_SCREEN) {
         return;
@@ -461,8 +515,74 @@ void files_screen_logic(AppState *ctx) {
     if (ctx->appCtx->currentScreen != FILES_SCREEN) {
         return;
     }
+
     // Don't render screen if nothing changed.
-    bool shouldRender = true;
+    bool shouldRender = false;
+
+    if (ctx->appCtx->keyboardScreenCtx->lastChange == 0) {
+        ctx->appCtx->keyboardScreenCtx->lastChange = SDL_GetTicks();
+        ctx->appCtx->keyboardScreenCtx->shouldRepaint = true;
+    }
+
+#ifdef WHY_BADGE
+    char const *rootFolders[] = {
+        "SD0:",
+        "FLASH0:",
+        "APPS:",
+        "STORAGE:"
+    };
+#else
+    char const *rootFolders[] = {
+        "~/",
+        "/"
+    };
+# endif
+
+    if (ctx->appCtx->filesScreenCtx->total_items == 0) {
+        if (!ctx->appCtx->filesScreenCtx->currentDirectory) {
+            ctx->appCtx->filesScreenCtx->currentDirectory = "/Users/frankbouwens/priv/Pixelbar/why-badge/mysdlapps/spacestate_nl";
+                //SDL_GetUserFolder(SDL_FOLDER_HOME);
+        }
+        int count = 0;
+        char **entries = SDL_GlobDirectory(
+            ctx->appCtx->filesScreenCtx->currentDirectory,
+            NULL,
+            0,
+            &count
+        );
+        if (!entries) {
+            SDL_Log(
+                "SDL_GlobDirectory error for '%s': %s",
+                ctx->appCtx->filesScreenCtx->currentDirectory,
+                SDL_GetError()
+            );
+            return; //TODO: foutmelding op scherm tonen
+        }
+
+        SDL_Log(
+            "Listing '%s' (%d items):",
+            ctx->appCtx->filesScreenCtx->currentDirectory,
+            count
+        );
+
+        for (int i = 0; entries[i] != NULL; i++) {
+            const char* p = entries[i];
+
+            SDL_PathInfo info;
+            if (!SDL_GetPathInfo(p, &info)) {
+                SDL_Log("  %s  [ERROR: %s]", p, SDL_GetError());
+                continue;
+            }
+
+            printf("%s\t%s\n", pathtype_to_str(info.type), p);
+        }
+
+        ctx->appCtx->filesScreenCtx->total_items = count;
+        ctx->appCtx->filesScreenCtx->entries = entries;
+        ctx->appCtx->filesScreenCtx->shouldRepaint = true;
+    }
+
+    shouldRender = ctx->appCtx->filesScreenCtx->shouldRepaint;
 
     if (!shouldRender) {
         return;
@@ -479,20 +599,6 @@ void files_screen_logic(AppState *ctx) {
      * APPS:[BADGEVMS.APPS]
      */
 
-#ifdef WHY_BADGE
-    char const *rootFolders[] = {
-        "SD0:",
-        "FLASH0:",
-        "APPS:",
-        "STORAGE:"
-    };
-#else
-    char const *rootFolders[] = {
-        "~/",
-        "/"
-    };
-# endif
-
     const int window_x = 30;
     const int window_y = 30;
     const int window_w = WINDOW_WIDTH - 60;
@@ -505,26 +611,107 @@ void files_screen_logic(AppState *ctx) {
 
     const int title_h = 45;
     draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - About", CDE_SELECTED_TEXT);
+    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Files", CDE_SELECTED_TEXT);
 
-    int content_y = 120;
+    char count_text[64];
+    snprintf(count_text, sizeof(count_text), "Entries: %d", ctx->appCtx->filesScreenCtx->total_items);
+    draw_text(ctx, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
 
-    char const *lines[] = {
-        "File Explorer",
-        "TODO",
-        "",
-        "Press any key to return.",
-    };
-    for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
-        draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
-        content_y += FONT_HEIGHT + 8;
+    int list_y = window_y + title_h + 55;
+    int list_h = window_h - title_h - 110;
+    int item_height = 80;
+
+    draw_rect(ctx, window_x + 15, list_y, window_w - 30, list_h, 0xFFFFFF);
+    draw_3d_border(ctx, window_x + 15, list_y, window_w - 30, list_h, 1);
+
+    ctx->appCtx->filesScreenCtx->items_per_page = (list_h - 6) / item_height;
+    int visible_start = ctx->appCtx->filesScreenCtx->scroll_offset;
+    int visible_end = visible_start + ctx->appCtx->filesScreenCtx->items_per_page;
+    if (visible_end > ctx->appCtx->filesScreenCtx->total_items)
+        visible_end = ctx->appCtx->filesScreenCtx->total_items;
+
+    for (int i = visible_start; i < visible_end; i++) {
+        int item_y = list_y + 3 + (i - visible_start) * item_height;
+        int item_x = window_x + 18;
+        int item_w = window_w - 36;
+
+        if (i == ctx->appCtx->filesScreenCtx->selected_item) {
+            draw_rect(ctx, item_x, item_y, item_w, item_height - 2, CDE_SELECTED_BG);
+        }
+
+        Uint32 text_color = (i == ctx->appCtx->filesScreenCtx->selected_item) ? CDE_SELECTED_TEXT : CDE_TEXT_COLOR;
+
+        // Draw Filename
+        draw_text_bold(ctx, item_x + 8, item_y + 6, ctx->appCtx->filesScreenCtx->entries[i], text_color);
+
+        // Draw Filetype
+        char fullpath[4096];
+        SDL_snprintf(fullpath, sizeof(fullpath), "%s/%s", ctx->appCtx->filesScreenCtx->currentDirectory, ctx->appCtx->filesScreenCtx->entries[i]);
+        SDL_PathInfo info;
+        if (!SDL_GetPathInfo(fullpath, &info)) {
+            SDL_Log("  %s  [ERROR: %s]", ctx->appCtx->filesScreenCtx->entries[i], SDL_GetError());
+        }
+        char filetype_text[64];
+        SDL_snprintf(filetype_text, sizeof(filetype_text), "Filetype: %s",
+                 pathtype_to_str(info.type));
+        draw_text(ctx, item_x + 8, item_y + 30, filetype_text, text_color);
+
+        // Draw description??
+        char desc[60];
+        SDL_snprintf(desc, sizeof(desc), "Size: %i", info.size);
+        draw_text(ctx, item_x + 8, item_y + 54, desc, text_color);
+
+        if (i < visible_end - 1) {
+            draw_rect(ctx, item_x, item_y + item_height - 2, item_w, 1, CDE_BORDER_DARK);
+        }
     }
+
+    if (ctx->appCtx->filesScreenCtx->total_items > ctx->appCtx->filesScreenCtx->items_per_page) {
+        int scrollbar_x = window_x + window_w - 35;
+        int scrollbar_y = list_y + 3;
+        int scrollbar_h = list_h - 6;
+
+        draw_rect(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, CDE_BUTTON_COLOR);
+        draw_3d_border(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, 1);
+
+        int thumb_h = (scrollbar_h * ctx->appCtx->filesScreenCtx->items_per_page) / ctx->appCtx->filesScreenCtx->
+                      total_items;
+        if (thumb_h < 30)
+            thumb_h = 30; // Minimum thumb size
+        int thumb_y = scrollbar_y;
+        if (ctx->appCtx->filesScreenCtx->total_items > ctx->appCtx->filesScreenCtx->items_per_page) {
+            thumb_y += ((scrollbar_h - thumb_h) * ctx->appCtx->filesScreenCtx->scroll_offset) / (
+                ctx->appCtx->filesScreenCtx->total_items - ctx->appCtx->filesScreenCtx->items_per_page);
+        }
+
+        draw_rect(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, CDE_PANEL_COLOR);
+        draw_3d_border(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, 0);
+    }
+
+    // draw_text(
+    //     ctx,
+    //     window_x + 15,
+    //     window_y + window_h - 35,
+    //     "UP/DOWN to navigate, SPACE does nothing, ESC to exit",
+    //     CDE_TEXT_COLOR
+    // );
+
+    draw_text(
+        ctx,
+        window_x + 15,
+        window_y + window_h - 35,
+        ctx->appCtx->filesScreenCtx->currentDirectory,
+        CDE_TEXT_COLOR
+    );
 
     // Render everything
     SDL_RenderClear(ctx->renderer);
     SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
     SDL_RenderTexture(ctx->renderer, ctx->framebuffer, NULL, NULL);
     SDL_RenderPresent(ctx->renderer);
+
+    ctx->appCtx->filesScreenCtx->shouldRepaint = false;
+    ctx->appCtx->keyboardScreenCtx->lastChange = SDL_GetTicks();
 }
 
 void keyboard_screen_logic(AppState *ctx) {
@@ -671,7 +858,8 @@ void sensors_screen_logic(AppState *ctx) {
     if (ctx->appCtx->sensorsScreenCtx->orientationSensor != NULL) {
         orientation_device_t *orientation_device = ctx->appCtx->sensorsScreenCtx->orientationSensor;
         snprintf(sensor1, sizeof(sensor1), "orientation: %d", orientation_device->_get_orientation(orientation_device));
-        snprintf(sensor2, sizeof(sensor2), "orientation degress: %d", orientation_device->_get_orientation_degrees(orientation_device));
+        snprintf(sensor2, sizeof(sensor2), "orientation degress: %d",
+                 orientation_device->_get_orientation_degrees(orientation_device));
     }
     char sensor3[128];
     char sensor4[128];
@@ -679,10 +867,10 @@ void sensors_screen_logic(AppState *ctx) {
     char sensor6[128];
     if (ctx->appCtx->sensorsScreenCtx->gasSensor != NULL) {
         gas_device_t *gas = ctx->appCtx->sensorsScreenCtx->gasSensor;
-        snprintf(sensor3, sizeof(sensor3),"Temperature in Celsius: %.2f \n", gas->_get_temperature(gas));
-        snprintf(sensor4, sizeof(sensor4),"Humidity in Rel. Percentage: %.2f \n", gas->_get_humidity(gas));
-        snprintf(sensor5, sizeof(sensor5),"Pressure in Pascal: %.2f \n", gas->_get_pressure(gas));
-        snprintf(sensor6, sizeof(sensor6),"Gas Resistance in Ohm: %.2f \n", gas->_get_gas_resistance(gas));
+        snprintf(sensor3, sizeof(sensor3), "Temperature in Celsius: %.2f \n", gas->_get_temperature(gas));
+        snprintf(sensor4, sizeof(sensor4), "Humidity in Rel. Percentage: %.2f \n", gas->_get_humidity(gas));
+        snprintf(sensor5, sizeof(sensor5), "Pressure in Pascal: %.2f \n", gas->_get_pressure(gas));
+        snprintf(sensor6, sizeof(sensor6), "Gas Resistance in Ohm: %.2f \n", gas->_get_gas_resistance(gas));
     }
     char const *lines[] = {
         "Sensors screen",
@@ -772,10 +960,10 @@ static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
     }
 
     if (ctx->appCtx->currentScreen == FILES_SCREEN) {
-        // Any key to continue
-        ctx->appCtx->currentScreen = MENU_SCREEN;
         // Force redraw
+        ctx->appCtx->filesScreenCtx->shouldRepaint = true;
         ctx->appCtx->welcomeScreenCtx->lastChange = 0;
+        files_screen_handle_key(ctx, key_code);
         return SDL_APP_CONTINUE;
     }
 
@@ -955,7 +1143,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 #ifdef WHY_BADGE
     //sleep(5);
     orientation_device_t *orientation;
-    orientation = (orientation_device_t *)device_get("ORIENTATION0");
+    orientation = (orientation_device_t *) device_get("ORIENTATION0");
     as->appCtx->sensorsScreenCtx->orientationSensor = orientation;
     if (orientation == NULL) {
         printf("Well, no device found");
@@ -968,7 +1156,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     }
 
     gas_device_t *gas;
-    gas = (gas_device_t *)device_get("GAS0");
+    gas = (gas_device_t *) device_get("GAS0");
     as->appCtx->sensorsScreenCtx->gasSensor = gas;
     if (gas == NULL) {
         printf("Well, no device found");
@@ -993,6 +1181,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
         AppState *as = (AppState *) appstate;
         SDL_free(as->appCtx->keyboardScreenCtx);
         SDL_free(as->appCtx->sensorsScreenCtx);
+        SDL_free(as->appCtx->filesScreenCtx->entries);
         SDL_free(as->appCtx->filesScreenCtx);
         SDL_free(as->appCtx->menuScreenCtx);
         SDL_free(as->appCtx->welcomeScreenCtx);
