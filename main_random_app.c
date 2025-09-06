@@ -331,7 +331,7 @@ void menu_screen_logic(AppState *ctx) {
     draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Menu", CDE_SELECTED_TEXT);
 
     char count_text[64];
-    snprintf(count_text, sizeof(count_text), "Menu Options Available: %d", ctx->appCtx->menuScreenCtx->total_items);
+    SDL_snprintf(count_text, sizeof(count_text), "Menu Options Available: %d", ctx->appCtx->menuScreenCtx->total_items);
     draw_text(ctx, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
 
     int list_y = window_y + title_h + 55;
@@ -361,7 +361,7 @@ void menu_screen_logic(AppState *ctx) {
         draw_text_bold(ctx, item_x + 8, item_y + 6, ctx->appCtx->menuScreenCtx->menu_options[i].name, text_color);
 
         char version_text[64];
-        snprintf(version_text, sizeof(version_text), "Version: %s",
+        SDL_snprintf(version_text, sizeof(version_text), "Version: %s",
                  ctx->appCtx->menuScreenCtx->menu_options[i].version);
         draw_text(ctx, item_x + 8, item_y + 30, version_text, text_color);
 
@@ -437,7 +437,7 @@ void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                     ctx->scroll_offset = ctx->selected_item;
                 }
             }
-            printf("files_screen_handle_key; (up) selected_item: %d\n", ctx->selected_item);
+            SDL_Log("files_screen_handle_key; (up) selected_item: %d\n", ctx->selected_item);
             break;
 
         case SDL_SCANCODE_DOWN:
@@ -447,12 +447,13 @@ void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                     ctx->scroll_offset = ctx->selected_item - ctx->items_per_page + 1;
                 }
             }
-            printf("files_screen_handle_key; (down) selected_item: %d\n", ctx->selected_item);
+            SDL_Log("files_screen_handle_key; (down) selected_item: %d\n", ctx->selected_item);
             break;
 
         case SDL_SCANCODE_RETURN:
         case SDL_SCANCODE_SPACE:
-            printf("files_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
+            SDL_Log("files_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
+            // Check if the selected item is a directory; If so, change currentDirectory.
             break;
         default: break;
     }
@@ -472,7 +473,7 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                     ctx->scroll_offset = ctx->selected_item;
                 }
             }
-            printf("menu_screen_handle_key; (up) selected_item: %d\n", ctx->selected_item);
+            SDL_Log("menu_screen_handle_key; (up) selected_item: %d\n", ctx->selected_item);
             break;
 
         case SDL_SCANCODE_DOWN:
@@ -482,12 +483,12 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                     ctx->scroll_offset = ctx->selected_item - ctx->items_per_page + 1;
                 }
             }
-            printf("menu_screen_handle_key; (down) selected_item: %d\n", ctx->selected_item);
+            SDL_Log("menu_screen_handle_key; (down) selected_item: %d\n", ctx->selected_item);
             break;
 
         case SDL_SCANCODE_RETURN:
         case SDL_SCANCODE_SPACE:
-            printf("menu_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
+            SDL_Log("menu_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
             switch (ctx->selected_item) {
                 case MENU_KEYS: {
                     as->appCtx->currentScreen = KEYBOARD_SCREEN;
@@ -533,6 +534,7 @@ void files_screen_logic(AppState *ctx) {
     };
 #else
     char const *rootFolders[] = {
+        "/Users/frankbouwens/priv/Pixelbar/why-badge/mysdlapps",
         "~/",
         "/"
     };
@@ -540,13 +542,12 @@ void files_screen_logic(AppState *ctx) {
 
     if (ctx->appCtx->filesScreenCtx->total_items == 0) {
         if (!ctx->appCtx->filesScreenCtx->currentDirectory) {
-            ctx->appCtx->filesScreenCtx->currentDirectory = "/Users/frankbouwens/priv/Pixelbar/why-badge/mysdlapps/spacestate_nl";
-                //SDL_GetUserFolder(SDL_FOLDER_HOME);
+            ctx->appCtx->filesScreenCtx->currentDirectory = rootFolders[0];
         }
         int count = 0;
         char **entries = SDL_GlobDirectory(
             ctx->appCtx->filesScreenCtx->currentDirectory,
-            NULL,
+            "*",//NULL,
             0,
             &count
         );
@@ -564,18 +565,6 @@ void files_screen_logic(AppState *ctx) {
             ctx->appCtx->filesScreenCtx->currentDirectory,
             count
         );
-
-        for (int i = 0; entries[i] != NULL; i++) {
-            const char* p = entries[i];
-
-            SDL_PathInfo info;
-            if (!SDL_GetPathInfo(p, &info)) {
-                SDL_Log("  %s  [ERROR: %s]", p, SDL_GetError());
-                continue;
-            }
-
-            printf("%s\t%s\n", pathtype_to_str(info.type), p);
-        }
 
         ctx->appCtx->filesScreenCtx->total_items = count;
         ctx->appCtx->filesScreenCtx->entries = entries;
@@ -614,7 +603,7 @@ void files_screen_logic(AppState *ctx) {
     draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Files", CDE_SELECTED_TEXT);
 
     char count_text[64];
-    snprintf(count_text, sizeof(count_text), "Entries: %d", ctx->appCtx->filesScreenCtx->total_items);
+    SDL_snprintf(count_text, sizeof(count_text), "Entries: %d", ctx->appCtx->filesScreenCtx->total_items);
     draw_text(ctx, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
 
     int list_y = window_y + title_h + 55;
@@ -729,7 +718,7 @@ void keyboard_screen_logic(AppState *ctx) {
         return;
     }
 
-    printf("Rendering keyboard screen\n");
+    SDL_Log("Rendering keyboard screen\n");
     ctx->appCtx->keyboardScreenCtx->shouldRepaint = false;
 
     const int window_x = 30;
@@ -749,7 +738,7 @@ void keyboard_screen_logic(AppState *ctx) {
     int content_y = 120;
 
     char latestScanCodeAsString[128];
-    snprintf(latestScanCodeAsString, sizeof(latestScanCodeAsString), "0x%02X",
+    SDL_snprintf(latestScanCodeAsString, sizeof(latestScanCodeAsString), "0x%02X",
              ctx->appCtx->keyboardScreenCtx->latestScancode);
 
     char const *lines[] = {
@@ -857,8 +846,8 @@ void sensors_screen_logic(AppState *ctx) {
     char sensor2[128];
     if (ctx->appCtx->sensorsScreenCtx->orientationSensor != NULL) {
         orientation_device_t *orientation_device = ctx->appCtx->sensorsScreenCtx->orientationSensor;
-        snprintf(sensor1, sizeof(sensor1), "orientation: %d", orientation_device->_get_orientation(orientation_device));
-        snprintf(sensor2, sizeof(sensor2), "orientation degress: %d",
+        SDL_snprintf(sensor1, sizeof(sensor1), "orientation: %d", orientation_device->_get_orientation(orientation_device));
+        SDL_snprintf(sensor2, sizeof(sensor2), "orientation degress: %d",
                  orientation_device->_get_orientation_degrees(orientation_device));
     }
     char sensor3[128];
@@ -867,10 +856,10 @@ void sensors_screen_logic(AppState *ctx) {
     char sensor6[128];
     if (ctx->appCtx->sensorsScreenCtx->gasSensor != NULL) {
         gas_device_t *gas = ctx->appCtx->sensorsScreenCtx->gasSensor;
-        snprintf(sensor3, sizeof(sensor3), "Temperature in Celsius: %.2f \n", gas->_get_temperature(gas));
-        snprintf(sensor4, sizeof(sensor4), "Humidity in Rel. Percentage: %.2f \n", gas->_get_humidity(gas));
-        snprintf(sensor5, sizeof(sensor5), "Pressure in Pascal: %.2f \n", gas->_get_pressure(gas));
-        snprintf(sensor6, sizeof(sensor6), "Gas Resistance in Ohm: %.2f \n", gas->_get_gas_resistance(gas));
+        SDL_snprintf(sensor3, sizeof(sensor3), "Temperature in Celsius: %.2f \n", gas->_get_temperature(gas));
+        SDL_snprintf(sensor4, sizeof(sensor4), "Humidity in Rel. Percentage: %.2f \n", gas->_get_humidity(gas));
+        SDL_snprintf(sensor5, sizeof(sensor5), "Pressure in Pascal: %.2f \n", gas->_get_pressure(gas));
+        SDL_snprintf(sensor6, sizeof(sensor6), "Gas Resistance in Ohm: %.2f \n", gas->_get_gas_resistance(gas));
     }
     char const *lines[] = {
         "Sensors screen",
@@ -909,7 +898,7 @@ void sensors_screen_logic(AppState *ctx) {
 }
 
 static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
-    printf("handle_key_event_\n");
+    SDL_Log("handle_key_event_\n");
     if (ctx->appCtx->currentScreen != KEYBOARD_SCREEN) {
         switch (key_code) {
             /* Quit. */
@@ -971,7 +960,7 @@ static SDL_AppResult handle_key_event_(AppState *ctx, SDL_Scancode key_code) {
 }
 
 static SDL_AppResult handle_hat_event_(AppState *appstate, Uint8 hat_value) {
-    printf("handle_hat_event_\n");
+    SDL_Log("handle_hat_event_\n");
     switch (hat_value) {
         case SDL_HAT_UP: /* Up */ break;
         case SDL_HAT_RIGHT: /* Right */ break;
@@ -983,7 +972,7 @@ static SDL_AppResult handle_hat_event_(AppState *appstate, Uint8 hat_value) {
 }
 
 SDL_AppResult SDL_AppIterate(void *appstate) {
-    // printf("SDL_AppIterate\n");
+    // SDL_Log("SDL_AppIterate\n");
     AppState *as = (AppState *) appstate;
     RandomAppContext *ctx = as->appCtx;
     Uint64 const now = SDL_GetTicks();
@@ -1008,7 +997,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 }
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
-    //printf("SDL_AppEvent\n");
+    //SDL_Log("SDL_AppEvent\n");
     //RandomAppContext *ctx = ((AppState *) appstate)->appCtx;
     AppState *as = (AppState *) appstate;
     switch (event->type) {
@@ -1018,7 +1007,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 #ifndef WHY_BADGE
                 joystick = SDL_OpenJoystick(event->jdevice.which);
                 if (!joystick) {
-                    printf("Failed to open joystick ID %u: %s", (unsigned int) event->jdevice.which, SDL_GetError());
+                    SDL_Log("Failed to open joystick ID %u: %s", (unsigned int) event->jdevice.which, SDL_GetError());
                 }
 #endif
             }
@@ -1038,7 +1027,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
-    printf("SDL_AppInit\n");
+    SDL_Log("SDL_AppInit\n");
 
 #ifndef WHY_BADGE
     if (!SDL_SetAppMetadata(APP_NAME, APP_VERSION, APP_ID)) {
@@ -1047,7 +1036,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 #endif
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
-        printf("Couldn't initialize SDL: %s", SDL_GetError());
+        SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
@@ -1074,7 +1063,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     //Create window first
     as->window = SDL_CreateWindow(APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_FLAGS);
     if (!as->window) {
-        printf("Failed to create window: %s", SDL_GetError());
+        SDL_Log("Failed to create window: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
@@ -1082,7 +1071,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     SDL_DisplayID display = SDL_GetDisplayForWindow(as->window);
     SDL_DisplayMode const *current_mode = SDL_GetCurrentDisplayMode(display);
     if (current_mode) {
-        printf(
+        SDL_Log(
             "Current display mode: %dx%d @%.2fHz, format: %s\n",
             current_mode->w,
             current_mode->h,
@@ -1094,7 +1083,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     // Create renderer
     as->renderer = SDL_CreateRenderer(as->window, NULL);
     if (!as->renderer) {
-        printf("Failed to create renderer: %s\n", SDL_GetError());
+        SDL_Log("Failed to create renderer: %s\n", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
@@ -1102,15 +1091,15 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     SDL_PropertiesID props = SDL_GetRendererProperties(as->renderer);
     if (props) {
         char const *name = SDL_GetStringProperty(props, SDL_PROP_RENDERER_NAME_STRING, "Unknown");
-        printf("Renderer: %s\n", name);
+        SDL_Log("Renderer: %s\n", name);
 
         SDL_PixelFormat const *formats =
                 (SDL_PixelFormat const *)
                 SDL_GetPointerProperty(props, SDL_PROP_RENDERER_TEXTURE_FORMATS_POINTER, NULL);
         if (formats) {
-            printf("Supported texture formats:\n");
+            SDL_Log("Supported texture formats:\n");
             for (int j = 0; formats[j] != SDL_PIXELFORMAT_UNKNOWN; j++) {
-                printf("  Format %d: %s\n", j, SDL_GetPixelFormatName(formats[j]));
+                SDL_Log("  Format %d: %s\n", j, SDL_GetPixelFormatName(formats[j]));
             }
         }
     }
@@ -1124,7 +1113,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     );
 
     if (!as->framebuffer) {
-        printf("Framebuffer texture could not be created! SDL_Error: %s\n", SDL_GetError());
+        SDL_Log("Framebuffer texture could not be created! SDL_Error: %s\n", SDL_GetError());
         SDL_DestroyRenderer(as->renderer);
         SDL_DestroyWindow(as->window);
         SDL_free(as);
@@ -1133,7 +1122,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
     as->pixels = (Uint16 *) SDL_calloc(WINDOW_WIDTH * WINDOW_HEIGHT, sizeof(Uint16));
     if (!as->pixels) {
-        printf("Could not allocate pixel buffer!\n");
+        SDL_Log("Could not allocate pixel buffer!\n");
         SDL_DestroyRenderer(as->renderer);
         SDL_DestroyWindow(as->window);
         SDL_free(as);
@@ -1146,26 +1135,26 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     orientation = (orientation_device_t *) device_get("ORIENTATION0");
     as->appCtx->sensorsScreenCtx->orientationSensor = orientation;
     if (orientation == NULL) {
-        printf("Well, no device found");
+        SDL_Log("Well, no device found");
     } else {
-        printf("Get BMI270 accel...\n");
+        SDL_Log("Get BMI270 accel...\n");
         int ret = orientation->_get_orientation(orientation);
-        printf("Orientation: %d \n", ret);
+        SDL_Log("Orientation: %d \n", ret);
         int degrees = orientation->_get_orientation_degrees(orientation);
-        printf("Orientation degrees: %d \n", degrees);
+        SDL_Log("Orientation degrees: %d \n", degrees);
     }
 
     gas_device_t *gas;
     gas = (gas_device_t *) device_get("GAS0");
     as->appCtx->sensorsScreenCtx->gasSensor = gas;
     if (gas == NULL) {
-        printf("Well, no device found");
+        SDL_Log("Well, no device found");
     } else {
-        printf("Get BME690...\n");
-        printf("Temperature in Celsius: %d \n", gas->_get_temperature(gas));
-        printf("Humidity in Rel. Percentage: %d \n", gas->_get_humidity(gas));
-        printf("Pressure in Pascal: %d \n", gas->_get_pressure(gas));
-        printf("Gas Resistance in Ohm: %d \n", gas->_get_gas_resistance(gas));
+        SDL_Log("Get BME690...\n");
+        SDL_Log("Temperature in Celsius: %d \n", gas->_get_temperature(gas));
+        SDL_Log("Humidity in Rel. Percentage: %d \n", gas->_get_humidity(gas));
+        SDL_Log("Pressure in Pascal: %d \n", gas->_get_pressure(gas));
+        SDL_Log("Gas Resistance in Ohm: %d \n", gas->_get_gas_resistance(gas));
     }
 #endif
 
@@ -1173,7 +1162,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 }
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
-    printf("SDL_AppQuit\n");
+    SDL_Log("SDL_AppQuit\n");
     if (joystick) {
         SDL_CloseJoystick(joystick);
     }
