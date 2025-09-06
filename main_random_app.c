@@ -97,7 +97,7 @@ typedef struct {
 typedef struct {
     bool shouldRepaint;
     Uint16 lastChange;
-    char *currentDirectory;
+    char *currentDirectory[4096];
     char **entries;
     int scroll_offset;
     int selected_item;
@@ -454,6 +454,18 @@ void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
         case SDL_SCANCODE_SPACE:
             SDL_Log("files_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
             // Check if the selected item is a directory; If so, change currentDirectory.
+            char fullpath[4096];
+            SDL_snprintf(fullpath, sizeof(fullpath), "%s/%s", ctx->currentDirectory, ctx->entries[ctx->selected_item]);
+            SDL_PathInfo info;
+            if (!SDL_GetPathInfo(fullpath, &info)) {
+                SDL_Log("  %s  [ERROR: %s]", ctx->entries[ctx->selected_item], SDL_GetError());
+            }
+            if (info.type == SDL_PATHTYPE_DIRECTORY) {
+                SDL_snprintf(ctx->currentDirectory, sizeof(ctx->currentDirectory), "%s", fullpath);
+                ctx->total_items = 0;
+                ctx->selected_item = 0;
+                //SDL_free(ctx->entries);
+            }
             break;
         default: break;
     }
@@ -541,8 +553,10 @@ void files_screen_logic(AppState *ctx) {
 # endif
 
     if (ctx->appCtx->filesScreenCtx->total_items == 0) {
-        if (!ctx->appCtx->filesScreenCtx->currentDirectory) {
-            ctx->appCtx->filesScreenCtx->currentDirectory = rootFolders[0];
+        if (strlen(ctx->appCtx->filesScreenCtx->currentDirectory) == 0) {
+            // Initialize to first root folder
+            SDL_snprintf(ctx->appCtx->filesScreenCtx->currentDirectory, sizeof(ctx->appCtx->filesScreenCtx->currentDirectory), "%s", rootFolders[0]);
+            SDL_Log("setting initial directory to '%s'\n", ctx->appCtx->filesScreenCtx->currentDirectory);
         }
         int count = 0;
         char **entries = SDL_GlobDirectory(
