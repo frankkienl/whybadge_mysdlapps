@@ -89,6 +89,7 @@ typedef enum {
     hackalot,
     hs_drenthe,
     hs_nijmegen,
+    maakplek_groningen,
     nurdspace,
     pixelbar,
     randomdata,
@@ -100,7 +101,7 @@ typedef enum {
     COUNT
 } hacker_spaces_e;
 
-#define NUM_HACKER_SPACES 15
+#define NUM_HACKER_SPACES 16
 
 typedef struct {
     hacker_space_t hackerspaces[NUM_HACKER_SPACES/*COUNT*/];
@@ -115,6 +116,7 @@ static hacker_spaces_t g_space_state = {
         [hackalot] = { "Hackalot", "https://hackalot.nl/statejson", 390, 443, false, 0 },
         [hs_drenthe] = { "Hackerspace Drenthe", "https://mqtt.hackerspace-drenthe.nl/spaceapi", 527, 209, false, 0 },
         [hs_nijmegen] = { "Hackerspace Nijmegen", "https://state.hackerspacenijmegen.nl/state.json", 416, 380, false, 0 },
+        [maakplek_groningen] = {"Maakplek Groningen", "https://maakplek.nl/api/", 530, 100, false, 0},
         [nurdspace] = { "NURDSpace", "https://space.nurdspace.nl/spaceapi/status.json", 385, 385, false, 0 },
         [pixelbar] = { "Pixelbar", "https://spaceapi.pixelbar.nl/", 272, 368, false, 0 },
         [randomdata] = { "RandomData", "", 326, 353, false, 0 },
