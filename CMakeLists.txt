@@ -27,10 +27,16 @@ project(mysdlapps C)
 
 set(CMAKE_C_STANDARD 17)
 
+# Vendored libraries (SDL3, SDL3_image)
+# These are commented out because we are using the installed SDL3 version on the system
+# They are in: /usr/local/include
+#add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
+#add_subdirectory(vendored/SDL_image EXCLUDE_FROM_ALL)
+
 ### RandomApp
 # Emscripten version
 if (BUILD_EMSCRIPTEN)
-    add_executable(randomapp_emscripten main_random_app.c)
+    add_executable(randomapp_emscripten randomapp/main_random_app.c)
     target_include_directories(randomapp_emscripten PRIVATE ${CMAKE_SOURCE_DIR}/sdk_dist/include)
     target_link_libraries(randomapp_emscripten sdl3)
 endif ()
@@ -39,10 +45,10 @@ link_directories(/usr/local/lib)
 include_directories(${CMAKE_SOURCE_DIR}/sdk_dist/include)
 
 # Desktop version
-add_executable(randomapp main_random_app.c)
+add_executable(randomapp randomapp/main_random_app.c)
 target_link_libraries(randomapp sdl3)
 # WHY Badge version
-add_executable(randomapp_badge main_random_app.c)
+add_executable(randomapp_badge randomapp/main_random_app.c)
 target_compile_definitions(randomapp_badge PRIVATE WHY_BADGE=1)
 target_link_libraries(randomapp_badge sdl3)
 

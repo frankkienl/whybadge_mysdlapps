@@ -13,7 +13,7 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_filesystem.h>
 
-#include "font.h"
+#include "../font.h"
 #include "stdlib.h"
 
 #ifdef WHY_BADGE
