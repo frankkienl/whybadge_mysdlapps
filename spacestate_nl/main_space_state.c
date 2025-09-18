@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h> // voor isspace()
 
 #ifdef WHY_BADGE
 #include "badgevms/wifi.h"
@@ -19,7 +18,6 @@
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include <SDL3/SDL_filesystem.h>
 
 #define WINDOW_WIDTH     720
 #define WINDOW_HEIGHT    720
@@ -36,7 +34,6 @@
 #define APP_ID "spacestate_nl"
 
 #include <dirent.h>
-#include <math.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -66,6 +63,7 @@ uint32_t big_timestamp = 0;
 uint32_t big_interval = 30*1000;
 uint32_t small_timestamp = 0;
 uint32_t small_interval = 250;
+int current_hacker_space = 0;
 
 // Data van 1 hacker space
 typedef struct {
@@ -163,17 +161,26 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, Mem
     return realsize;
 }
 
+int my_isspace(char c) {
+    return c == ' '  ||
+           c == '\t' ||
+           c == '\n' ||
+           c == '\r' ||
+           c == '\v' ||
+           c == '\f';
+}
+
 void remove_whitespace(char *str) {
-    char *src = str; // lezer
-    char *dst = str; // schrijver
+    char *src = str; // read
+    char *dst = str; // write
 
     while (*src) {
-        if (!isspace((unsigned char)*src)) {
-            *dst++ = *src; // kopieer als het GEEN whitespace is
+        if (!my_isspace((unsigned char)*src)) {
+            *dst++ = *src; // copy when not whitespace
         }
         src++;
     }
-    *dst = '\0'; // afsluiten
+    *dst = '\0'; // end of string
 }
 
 bool get_space_state(const char *space_url) {
@@ -245,30 +252,29 @@ void ensure_images_exist() {
 SDL_AppResult SDL_AppIterate(void *appstate) {
 
     AppState *as = (AppState *) appstate;
-    int i = 0;
     uint32_t current_time = time(NULL) * 1000;
     if (current_time - big_timestamp >= big_interval) {
         if (current_time - small_timestamp >= small_interval) {
             // Check Spaces
-            printf("Space State NL - Checking %s %s", g_space_state.hackerspaces[i].display_name, "...");
-            bool isOpen = get_space_state(g_space_state.hackerspaces[i].url);
-            g_space_state.hackerspaces[i].is_open = isOpen;
+            printf("Space State NL - Checking %s %s", g_space_state.hackerspaces[current_hacker_space].display_name, "...");
+            bool isOpen = get_space_state(g_space_state.hackerspaces[current_hacker_space].url);
+            g_space_state.hackerspaces[current_hacker_space].is_open = isOpen;
             if (isOpen) {
-                printf("Space State NL - Checking %s %s", g_space_state.hackerspaces[i].display_name, " is OPEN");
+                printf("Space State NL - Checking %s %s", g_space_state.hackerspaces[current_hacker_space].display_name, " is OPEN");
                 render_png_with_alpha_scaled(as->pixels, WINDOW_WIDTH, WINDOW_HEIGHT,
-                                             PIN_GREEN, g_space_state.hackerspaces[i].x,
-                                             g_space_state.hackerspaces[i].y, 1);
+                                             PIN_GREEN, g_space_state.hackerspaces[current_hacker_space].x,
+                                             g_space_state.hackerspaces[current_hacker_space].y, 1);
             } else {
-                printf("Space State NL - Checking %s %s", g_space_state.hackerspaces[i].display_name, " is CLOSED");
+                printf("Space State NL - Checking %s %s", g_space_state.hackerspaces[current_hacker_space].display_name, " is CLOSED");
                 render_png_with_alpha_scaled(as->pixels, WINDOW_WIDTH, WINDOW_HEIGHT,
-                                             PIN_RED, g_space_state.hackerspaces[i].x,
-                                             g_space_state.hackerspaces[i].y, 1);
+                                             PIN_RED, g_space_state.hackerspaces[current_hacker_space].x,
+                                             g_space_state.hackerspaces[current_hacker_space].y, 1);
             }
-            i++;
+            current_hacker_space++;
             small_timestamp = current_time;
-            if (i >= NUM_HACKER_SPACES) {
+            if (current_hacker_space >= NUM_HACKER_SPACES) {
                 printf("Space State NL - Checked all, waiting for about 30 seconds");
-                i = 0;
+                current_hacker_space = 0;
                 big_timestamp = current_time;
             }
         }
