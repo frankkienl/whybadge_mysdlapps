@@ -11,7 +11,6 @@
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include <SDL3/SDL_filesystem.h>
 
 #include "../font.h"
 #include "stdlib.h"
@@ -28,6 +27,7 @@
 #endif
 #ifndef WHY_BADGE
 #define WINDOW_FLAGS     0
+#include <SDL3/SDL_filesystem.h>
 #endif
 
 #define CDE_BG_COLOR      0x9CA0A0
@@ -454,6 +454,7 @@ void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
 
         case SDL_SCANCODE_RETURN:
         case SDL_SCANCODE_SPACE:
+#ifndef WHY_BADGE
             SDL_Log("files_screen_handle_key; (space/return) selected_item: %d\n", ctx->selected_item);
             // Check if the selected item is a directory; If so, change currentDirectory.
             char fullpath[4096];
@@ -468,6 +469,7 @@ void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                 ctx->selected_item = 0;
                 //SDL_free(ctx->entries);
             }
+#endif
             break;
         default: break;
     }
@@ -526,6 +528,7 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
     }
 }
 
+#ifndef WHY_BADGE
 SDL_EnumerationResult my_enumerate_callback(void *userdata, const char *dirname, const char *fname) {
     FilesScreenContext *ctx = (FilesScreenContext *)userdata;
     SDL_Log("Found file: %s%s", dirname, fname);
@@ -534,6 +537,7 @@ SDL_EnumerationResult my_enumerate_callback(void *userdata, const char *dirname,
     ctx->total_items++;
     return SDL_ENUM_CONTINUE;
 }
+#endif
 
 void files_screen_logic(AppState *ctx) {
     if (ctx->appCtx->currentScreen != FILES_SCREEN) {
@@ -597,6 +601,7 @@ void files_screen_logic(AppState *ctx) {
     //     ctx->appCtx->filesScreenCtx->shouldRepaint = true;
     // }
 
+#ifndef WHY_BADGE
     if (ctx->appCtx->filesScreenCtx->total_items == 0) {
         if (strlen(ctx->appCtx->filesScreenCtx->currentDirectory) == 0) {
             // Initialize to first root folder
@@ -620,6 +625,7 @@ void files_screen_logic(AppState *ctx) {
 
         ctx->appCtx->filesScreenCtx->shouldRepaint = true;
     }
+#endif
 
     shouldRender = ctx->appCtx->filesScreenCtx->shouldRepaint;
 
@@ -684,6 +690,7 @@ void files_screen_logic(AppState *ctx) {
         // Draw Filename
         draw_text_bold(pixels, item_x + 8, item_y + 6, ctx->appCtx->filesScreenCtx->entries[i], text_color);
 
+#ifndef WHY_BADGE
         // Draw Filetype
         char fullpath[4096];
         SDL_snprintf(fullpath, sizeof(fullpath), "%s/%s", ctx->appCtx->filesScreenCtx->currentDirectory,
@@ -705,6 +712,7 @@ void files_screen_logic(AppState *ctx) {
         if (i < visible_end - 1) {
             draw_rect(pixels, item_x, item_y + item_height - 2, item_w, 1, CDE_BORDER_DARK);
         }
+#endif
     }
 
     if (ctx->appCtx->filesScreenCtx->total_items > ctx->appCtx->filesScreenCtx->items_per_page) {
