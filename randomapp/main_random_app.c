@@ -153,7 +153,7 @@ static Uint16 rgb888_to_rgb565(const Uint32 rgb888) {
     return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
 
-void draw_rect(AppState *ctx, int x, int y, int w, int h, Uint32 color) {
+void draw_rect(Uint16 *pixels, int x, int y, int w, int h, Uint32 color) {
     Uint16 rgb565 = rgb888_to_rgb565(color);
     int x2 = x + w;
     int y2 = y + h;
@@ -168,7 +168,7 @@ void draw_rect(AppState *ctx, int x, int y, int w, int h, Uint32 color) {
         y2 = WINDOW_HEIGHT;
 
     for (int py = y; py < y2; py++) {
-        Uint16 *row = &ctx->pixels[py * WINDOW_WIDTH + x];
+        Uint16 *row = &pixels[py * WINDOW_WIDTH + x];
         int width = x2 - x;
         for (int i = 0; i < width; i++) {
             row[i] = rgb565;
@@ -176,7 +176,7 @@ void draw_rect(AppState *ctx, int x, int y, int w, int h, Uint32 color) {
     }
 }
 
-void draw_char(AppState *ctx, int x, int y, char c, Uint32 color) {
+void draw_char(Uint16 *pixels, int x, int y, char c, Uint32 color) {
     if (c < FONT_FIRST_CHAR || c > FONT_LAST_CHAR)
         return;
 
@@ -196,47 +196,47 @@ void draw_char(AppState *ctx, int x, int y, char c, Uint32 color) {
                 // Check bit from MSB
                 int px = x + col;
                 if (px >= 0 && px < WINDOW_WIDTH) {
-                    ctx->pixels[py * WINDOW_WIDTH + px] = rgb565;
+                    pixels[py * WINDOW_WIDTH + px] = rgb565;
                 }
             }
         }
     }
 }
 
-void draw_text(AppState *ctx, int x, int y, char const *text, Uint32 color) {
+void draw_text(Uint16 *pixels, int x, int y, char const *text, Uint32 color) {
     int current_x = x;
 
     while (*text) {
-        draw_char(ctx, current_x, y, *text, color);
+        draw_char(pixels, current_x, y, *text, color);
         current_x += FONT_WIDTH;
         text++;
     }
 }
 
-void draw_text_bold(AppState *ctx, int x, int y, char const *text, Uint32 color) {
-    draw_text(ctx, x, y, text, color);
-    draw_text(ctx, x + 1, y, text, color);
+void draw_text_bold(Uint16 *pixels, int x, int y, char const *text, Uint32 color) {
+    draw_text(pixels, x, y, text, color);
+    draw_text(pixels, x + 1, y, text, color);
 }
 
 int get_text_width(char const *text) {
     return strlen(text) * FONT_WIDTH;
 }
 
-void draw_text_centered(AppState *ctx, int x, int y, int width, char const *text, Uint32 color) {
+void draw_text_centered(Uint16 *pixels, int x, int y, int width, char const *text, Uint32 color) {
     int text_w = get_text_width(text);
     int text_x = x + (width - text_w) / 2;
-    draw_text(ctx, text_x, y, text, color);
+    draw_text(pixels, text_x, y, text, color);
 }
 
-void draw_3d_border(AppState *ctx, int x, int y, int w, int h, int inset) {
+void draw_3d_border(Uint16 *pixels, int x, int y, int w, int h, int inset) {
     Uint32 light_color = inset ? CDE_BORDER_DARK : CDE_BORDER_LIGHT;
     Uint32 dark_color = inset ? CDE_BORDER_LIGHT : CDE_BORDER_DARK;
 
-    draw_rect(ctx, x, y, w, 3, light_color);
-    draw_rect(ctx, x, y, 3, h, light_color);
+    draw_rect(pixels, x, y, w, 3, light_color);
+    draw_rect(pixels, x, y, 3, h, light_color);
 
-    draw_rect(ctx, x, y + h - 3, w, 3, dark_color);
-    draw_rect(ctx, x + w - 3, y, 3, h, dark_color);
+    draw_rect(pixels, x, y + h - 3, w, 3, dark_color);
+    draw_rect(pixels, x + w - 3, y, 3, h, dark_color);
 }
 
 void welcome_screen_logic(AppState *ctx) {
@@ -271,19 +271,20 @@ void welcome_screen_logic(AppState *ctx) {
     const int window_w = WINDOW_WIDTH - 60;
     const int window_h = WINDOW_HEIGHT - 60;
 
-    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+    Uint16 *pixels = ctx->pixels;
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
 
-    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
-    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+    draw_rect(pixels, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(pixels, window_x, window_y, window_w, window_h, 0);
 
     const int title_h = 45;
-    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Welcome", CDE_SELECTED_TEXT);
+    draw_rect(pixels, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(pixels, window_x + 15, window_y + 11, "Random App - Welcome", CDE_SELECTED_TEXT);
 
     int content_y = window_y + window_h / 2;
 
     if (ctx->appCtx->welcomeScreenCtx->showWelcomeScreenDesc) {
-        draw_text_centered(ctx, window_x, content_y, window_w, "Press any key to continue...", CDE_TEXT_COLOR);
+        draw_text_centered(pixels, window_x, content_y, window_w, "Press any key to continue...", CDE_TEXT_COLOR);
     }
     // Render everything
     SDL_RenderClear(ctx->renderer);
@@ -321,25 +322,26 @@ void menu_screen_logic(AppState *ctx) {
     int window_w = WINDOW_WIDTH - 60;
     int window_h = WINDOW_HEIGHT - 60;
 
-    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+    Uint16 *pixels = ctx->pixels;
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
 
-    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
-    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+    draw_rect(pixels, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(pixels, window_x, window_y, window_w, window_h, 0);
 
     int title_h = 45;
-    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Menu", CDE_SELECTED_TEXT);
+    draw_rect(pixels, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(pixels, window_x + 15, window_y + 11, "Random App - Menu", CDE_SELECTED_TEXT);
 
     char count_text[64];
     SDL_snprintf(count_text, sizeof(count_text), "Menu Options Available: %d", ctx->appCtx->menuScreenCtx->total_items);
-    draw_text(ctx, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
+    draw_text(pixels, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
 
     int list_y = window_y + title_h + 55;
     int list_h = window_h - title_h - 110;
     int item_height = 80;
 
-    draw_rect(ctx, window_x + 15, list_y, window_w - 30, list_h, 0xFFFFFF);
-    draw_3d_border(ctx, window_x + 15, list_y, window_w - 30, list_h, 1);
+    draw_rect(pixels, window_x + 15, list_y, window_w - 30, list_h, 0xFFFFFF);
+    draw_3d_border(pixels, window_x + 15, list_y, window_w - 30, list_h, 1);
 
     ctx->appCtx->menuScreenCtx->items_per_page = (list_h - 6) / item_height;
     int visible_start = ctx->appCtx->menuScreenCtx->scroll_offset;
@@ -353,17 +355,17 @@ void menu_screen_logic(AppState *ctx) {
         int item_w = window_w - 36;
 
         if (i == ctx->appCtx->menuScreenCtx->selected_item) {
-            draw_rect(ctx, item_x, item_y, item_w, item_height - 2, CDE_SELECTED_BG);
+            draw_rect(pixels, item_x, item_y, item_w, item_height - 2, CDE_SELECTED_BG);
         }
 
         Uint32 text_color = (i == ctx->appCtx->menuScreenCtx->selected_item) ? CDE_SELECTED_TEXT : CDE_TEXT_COLOR;
 
-        draw_text_bold(ctx, item_x + 8, item_y + 6, ctx->appCtx->menuScreenCtx->menu_options[i].name, text_color);
+        draw_text_bold(pixels, item_x + 8, item_y + 6, ctx->appCtx->menuScreenCtx->menu_options[i].name, text_color);
 
         char version_text[64];
         SDL_snprintf(version_text, sizeof(version_text), "Version: %s",
                  ctx->appCtx->menuScreenCtx->menu_options[i].version);
-        draw_text(ctx, item_x + 8, item_y + 30, version_text, text_color);
+        draw_text(pixels, item_x + 8, item_y + 30, version_text, text_color);
 
         char desc[60] = {0};
         int max_desc_chars = (item_w - 16) / FONT_WIDTH;
@@ -378,10 +380,10 @@ void menu_screen_logic(AppState *ctx) {
                 desc[max_desc_chars - 1] = '.';
             }
         }
-        draw_text(ctx, item_x + 8, item_y + 54, desc, text_color);
+        draw_text(pixels, item_x + 8, item_y + 54, desc, text_color);
 
         if (i < visible_end - 1) {
-            draw_rect(ctx, item_x, item_y + item_height - 2, item_w, 1, CDE_BORDER_DARK);
+            draw_rect(pixels, item_x, item_y + item_height - 2, item_w, 1, CDE_BORDER_DARK);
         }
     }
 
@@ -390,8 +392,8 @@ void menu_screen_logic(AppState *ctx) {
         int scrollbar_y = list_y + 3;
         int scrollbar_h = list_h - 6;
 
-        draw_rect(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, CDE_BUTTON_COLOR);
-        draw_3d_border(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, 1);
+        draw_rect(pixels, scrollbar_x, scrollbar_y, 20, scrollbar_h, CDE_BUTTON_COLOR);
+        draw_3d_border(pixels, scrollbar_x, scrollbar_y, 20, scrollbar_h, 1);
 
         int thumb_h = (scrollbar_h * ctx->appCtx->menuScreenCtx->items_per_page) / ctx->appCtx->menuScreenCtx->
                       total_items;
@@ -403,8 +405,8 @@ void menu_screen_logic(AppState *ctx) {
                 ctx->appCtx->menuScreenCtx->total_items - ctx->appCtx->menuScreenCtx->items_per_page);
         }
 
-        draw_rect(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, CDE_PANEL_COLOR);
-        draw_3d_border(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, 0);
+        draw_rect(pixels, scrollbar_x + 3, thumb_y, 14, thumb_h, CDE_PANEL_COLOR);
+        draw_3d_border(pixels, scrollbar_x + 3, thumb_y, 14, thumb_h, 0);
     }
 
     draw_text(
@@ -607,25 +609,26 @@ void files_screen_logic(AppState *ctx) {
     const int window_w = WINDOW_WIDTH - 60;
     const int window_h = WINDOW_HEIGHT - 60;
 
-    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+    Uint16 *pixels = ctx->pixels;
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
 
-    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
-    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+    draw_rect(pixels, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(pixels, window_x, window_y, window_w, window_h, 0);
 
     const int title_h = 45;
-    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Files", CDE_SELECTED_TEXT);
+    draw_rect(pixels, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(pixels, window_x + 15, window_y + 11, "Random App - Files", CDE_SELECTED_TEXT);
 
     char count_text[64];
     SDL_snprintf(count_text, sizeof(count_text), "Entries: %d", ctx->appCtx->filesScreenCtx->total_items);
-    draw_text(ctx, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
+    draw_text(pixels, window_x + 15, window_y + title_h + 20, count_text, CDE_TEXT_COLOR);
 
     int list_y = window_y + title_h + 55;
     int list_h = window_h - title_h - 110;
     int item_height = 80;
 
-    draw_rect(ctx, window_x + 15, list_y, window_w - 30, list_h, 0xFFFFFF);
-    draw_3d_border(ctx, window_x + 15, list_y, window_w - 30, list_h, 1);
+    draw_rect(pixels, window_x + 15, list_y, window_w - 30, list_h, 0xFFFFFF);
+    draw_3d_border(pixels, window_x + 15, list_y, window_w - 30, list_h, 1);
 
     ctx->appCtx->filesScreenCtx->items_per_page = (list_h - 6) / item_height;
     int visible_start = ctx->appCtx->filesScreenCtx->scroll_offset;
@@ -639,13 +642,13 @@ void files_screen_logic(AppState *ctx) {
         int item_w = window_w - 36;
 
         if (i == ctx->appCtx->filesScreenCtx->selected_item) {
-            draw_rect(ctx, item_x, item_y, item_w, item_height - 2, CDE_SELECTED_BG);
+            draw_rect(pixels, item_x, item_y, item_w, item_height - 2, CDE_SELECTED_BG);
         }
 
         Uint32 text_color = (i == ctx->appCtx->filesScreenCtx->selected_item) ? CDE_SELECTED_TEXT : CDE_TEXT_COLOR;
 
         // Draw Filename
-        draw_text_bold(ctx, item_x + 8, item_y + 6, ctx->appCtx->filesScreenCtx->entries[i], text_color);
+        draw_text_bold(pixels, item_x + 8, item_y + 6, ctx->appCtx->filesScreenCtx->entries[i], text_color);
 
         // Draw Filetype
         char fullpath[4096];
@@ -657,15 +660,15 @@ void files_screen_logic(AppState *ctx) {
         char filetype_text[64];
         SDL_snprintf(filetype_text, sizeof(filetype_text), "Filetype: %s",
                  pathtype_to_str(info.type));
-        draw_text(ctx, item_x + 8, item_y + 30, filetype_text, text_color);
+        draw_text(pixels, item_x + 8, item_y + 30, filetype_text, text_color);
 
         // Draw description??
         char desc[60];
         SDL_snprintf(desc, sizeof(desc), "Size: %i", info.size);
-        draw_text(ctx, item_x + 8, item_y + 54, desc, text_color);
+        draw_text(pixels, item_x + 8, item_y + 54, desc, text_color);
 
         if (i < visible_end - 1) {
-            draw_rect(ctx, item_x, item_y + item_height - 2, item_w, 1, CDE_BORDER_DARK);
+            draw_rect(pixels, item_x, item_y + item_height - 2, item_w, 1, CDE_BORDER_DARK);
         }
     }
 
@@ -674,8 +677,8 @@ void files_screen_logic(AppState *ctx) {
         int scrollbar_y = list_y + 3;
         int scrollbar_h = list_h - 6;
 
-        draw_rect(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, CDE_BUTTON_COLOR);
-        draw_3d_border(ctx, scrollbar_x, scrollbar_y, 20, scrollbar_h, 1);
+        draw_rect(pixels, scrollbar_x, scrollbar_y, 20, scrollbar_h, CDE_BUTTON_COLOR);
+        draw_3d_border(pixels, scrollbar_x, scrollbar_y, 20, scrollbar_h, 1);
 
         int thumb_h = (scrollbar_h * ctx->appCtx->filesScreenCtx->items_per_page) / ctx->appCtx->filesScreenCtx->
                       total_items;
@@ -687,8 +690,8 @@ void files_screen_logic(AppState *ctx) {
                 ctx->appCtx->filesScreenCtx->total_items - ctx->appCtx->filesScreenCtx->items_per_page);
         }
 
-        draw_rect(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, CDE_PANEL_COLOR);
-        draw_3d_border(ctx, scrollbar_x + 3, thumb_y, 14, thumb_h, 0);
+        draw_rect(pixels, scrollbar_x + 3, thumb_y, 14, thumb_h, CDE_PANEL_COLOR);
+        draw_3d_border(pixels, scrollbar_x + 3, thumb_y, 14, thumb_h, 0);
     }
 
     // draw_text(
@@ -740,14 +743,15 @@ void keyboard_screen_logic(AppState *ctx) {
     const int window_w = WINDOW_WIDTH - 60;
     const int window_h = WINDOW_HEIGHT - 60;
 
-    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+    Uint16 *pixels = ctx->pixels;
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
 
-    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
-    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+    draw_rect(pixels, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(pixels, window_x, window_y, window_w, window_h, 0);
 
     const int title_h = 45;
-    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Keyboard", CDE_SELECTED_TEXT);
+    draw_rect(pixels, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(pixels, window_x + 15, window_y + 11, "Random App - Keyboard", CDE_SELECTED_TEXT);
 
     int content_y = 120;
 
@@ -766,7 +770,7 @@ void keyboard_screen_logic(AppState *ctx) {
         "(Press ESC to exit the app)",
     };
     for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
-        draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
+        draw_text_centered(pixels, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
         content_y += FONT_HEIGHT + 8;
     }
 
@@ -793,14 +797,15 @@ void about_screen_logic(AppState *ctx) {
     const int window_w = WINDOW_WIDTH - 60;
     const int window_h = WINDOW_HEIGHT - 60;
 
-    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+    Uint16 *pixels = ctx->pixels;
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
 
-    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
-    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+    draw_rect(pixels, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(pixels, window_x, window_y, window_w, window_h, 0);
 
     const int title_h = 45;
-    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - About", CDE_SELECTED_TEXT);
+    draw_rect(pixels, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(pixels, window_x + 15, window_y + 11, "Random App - About", CDE_SELECTED_TEXT);
 
     int content_y = 120;
 
@@ -817,7 +822,7 @@ void about_screen_logic(AppState *ctx) {
         "Press any key to return.",
     };
     for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
-        draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
+        draw_text_centered(pixels, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
         content_y += FONT_HEIGHT + 8;
     }
 
@@ -844,14 +849,15 @@ void sensors_screen_logic(AppState *ctx) {
     const int window_w = WINDOW_WIDTH - 60;
     const int window_h = WINDOW_HEIGHT - 60;
 
-    draw_rect(ctx, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
+    Uint16 *pixels = ctx->pixels;
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, CDE_BG_COLOR);
 
-    draw_rect(ctx, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
-    draw_3d_border(ctx, window_x, window_y, window_w, window_h, 0);
+    draw_rect(pixels, window_x, window_y, window_w, window_h, CDE_PANEL_COLOR);
+    draw_3d_border(pixels, window_x, window_y, window_w, window_h, 0);
 
     const int title_h = 45;
-    draw_rect(ctx, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
-    draw_text_bold(ctx, window_x + 15, window_y + 11, "Random App - Sensors", CDE_SELECTED_TEXT);
+    draw_rect(pixels, window_x + 3, window_y + 3, window_w - 6, title_h, CDE_TITLE_BG);
+    draw_text_bold(pixels, window_x + 15, window_y + 11, "Random App - Sensors", CDE_SELECTED_TEXT);
 
     int content_y = 120;
 
@@ -900,7 +906,7 @@ void sensors_screen_logic(AppState *ctx) {
 #endif
 
     for (int i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
-        draw_text_centered(ctx, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
+        draw_text_centered(pixels, window_x, content_y, window_w, lines[i], CDE_TEXT_COLOR);
         content_y += FONT_HEIGHT + 8;
     }
 
