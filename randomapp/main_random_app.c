@@ -410,7 +410,7 @@ void menu_screen_logic(AppState *ctx) {
     }
 
     draw_text(
-        ctx,
+        pixels,
         window_x + 15,
         window_y + window_h - 35,
         "UP/DOWN to navigate, SPACE to open, ESC to exit",
@@ -463,7 +463,7 @@ void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                 SDL_Log("  %s  [ERROR: %s]", ctx->entries[ctx->selected_item], SDL_GetError());
             }
             if (info.type == SDL_PATHTYPE_DIRECTORY) {
-                SDL_snprintf(ctx->currentDirectory, sizeof(ctx->currentDirectory), "%s", fullpath);
+                SDL_snprintf((char*)ctx->currentDirectory, sizeof(ctx->currentDirectory), "%s", fullpath);
                 ctx->total_items = 0;
                 ctx->selected_item = 0;
                 //SDL_free(ctx->entries);
@@ -738,10 +738,10 @@ void files_screen_logic(AppState *ctx) {
     // );
 
     draw_text(
-        ctx,
+        pixels,
         window_x + 15,
         window_y + window_h - 35,
-        ctx->appCtx->filesScreenCtx->currentDirectory,
+        (char*)ctx->appCtx->filesScreenCtx->currentDirectory,
         CDE_TEXT_COLOR
     );
 
