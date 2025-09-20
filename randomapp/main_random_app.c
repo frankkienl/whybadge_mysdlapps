@@ -98,7 +98,7 @@ typedef struct {
     bool shouldRepaint;
     Uint16 lastChange;
     char *currentDirectory[4096];
-    char **entries;
+    char **entries; // max 255 entries of max 4096 chars
     int scroll_offset;
     int selected_item;
     int total_items;
@@ -364,7 +364,7 @@ void menu_screen_logic(AppState *ctx) {
 
         char version_text[64];
         SDL_snprintf(version_text, sizeof(version_text), "Version: %s",
-                 ctx->appCtx->menuScreenCtx->menu_options[i].version);
+                     ctx->appCtx->menuScreenCtx->menu_options[i].version);
         draw_text(pixels, item_x + 8, item_y + 30, version_text, text_color);
 
         char desc[60] = {0};
@@ -526,6 +526,15 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
     }
 }
 
+SDL_EnumerationResult my_enumerate_callback(void *userdata, const char *dirname, const char *fname) {
+    FilesScreenContext *ctx = (FilesScreenContext *)userdata;
+    SDL_Log("Found file: %s%s", dirname, fname);
+    // Add to entries
+    ctx->entries[ctx->total_items] = SDL_strdup(fname);
+    ctx->total_items++;
+    return SDL_ENUM_CONTINUE;
+}
+
 void files_screen_logic(AppState *ctx) {
     if (ctx->appCtx->currentScreen != FILES_SCREEN) {
         return;
@@ -554,36 +563,61 @@ void files_screen_logic(AppState *ctx) {
     };
 # endif
 
+    // if (ctx->appCtx->filesScreenCtx->total_items == 0) {
+    //     if (strlen(ctx->appCtx->filesScreenCtx->currentDirectory) == 0) {
+    //         // Initialize to first root folder
+    //         SDL_snprintf(ctx->appCtx->filesScreenCtx->currentDirectory,
+    //                      sizeof(ctx->appCtx->filesScreenCtx->currentDirectory), "%s", rootFolders[0]);
+    //         SDL_Log("setting initial directory to '%s'\n", ctx->appCtx->filesScreenCtx->currentDirectory);
+    //     }
+    //     int count = 0;
+    //     char **entries = SDL_GlobDirectory(
+    //         ctx->appCtx->filesScreenCtx->currentDirectory,
+    //         "*", //NULL,
+    //         0,
+    //         &count
+    //     );
+    //     if (!entries) {
+    //         SDL_Log(
+    //             "SDL_GlobDirectory error for '%s': %s",
+    //             ctx->appCtx->filesScreenCtx->currentDirectory,
+    //             SDL_GetError()
+    //         );
+    //         return; //TODO: foutmelding op scherm tonen
+    //     }
+    //
+    //     SDL_Log(
+    //         "Listing '%s' (%d items):",
+    //         ctx->appCtx->filesScreenCtx->currentDirectory,
+    //         count
+    //     );
+    //
+    //     ctx->appCtx->filesScreenCtx->total_items = count;
+    //     ctx->appCtx->filesScreenCtx->entries = entries;
+    //     ctx->appCtx->filesScreenCtx->shouldRepaint = true;
+    // }
+
     if (ctx->appCtx->filesScreenCtx->total_items == 0) {
         if (strlen(ctx->appCtx->filesScreenCtx->currentDirectory) == 0) {
             // Initialize to first root folder
             SDL_snprintf(ctx->appCtx->filesScreenCtx->currentDirectory, sizeof(ctx->appCtx->filesScreenCtx->currentDirectory), "%s", rootFolders[0]);
             SDL_Log("setting initial directory to '%s'\n", ctx->appCtx->filesScreenCtx->currentDirectory);
         }
-        int count = 0;
-        char **entries = SDL_GlobDirectory(
-            ctx->appCtx->filesScreenCtx->currentDirectory,
-            "*",//NULL,
-            0,
-            &count
-        );
-        if (!entries) {
+
+        ctx->appCtx->filesScreenCtx->entries = SDL_calloc(256, sizeof(char *));
+        ctx->appCtx->filesScreenCtx->entries[0] = SDL_strdup("..");
+        ctx->appCtx->filesScreenCtx->total_items = 1;
+        ctx->appCtx->filesScreenCtx->selected_item = 0;
+
+        bool success = SDL_EnumerateDirectory(ctx->appCtx->filesScreenCtx->currentDirectory, my_enumerate_callback, ctx->appCtx->filesScreenCtx);
+        if (!success) {
             SDL_Log(
-                "SDL_GlobDirectory error for '%s': %s",
+                "SDL_EnumerateDirectory error for '%s': %s",
                 ctx->appCtx->filesScreenCtx->currentDirectory,
                 SDL_GetError()
             );
-            return; //TODO: foutmelding op scherm tonen
         }
 
-        SDL_Log(
-            "Listing '%s' (%d items):",
-            ctx->appCtx->filesScreenCtx->currentDirectory,
-            count
-        );
-
-        ctx->appCtx->filesScreenCtx->total_items = count;
-        ctx->appCtx->filesScreenCtx->entries = entries;
         ctx->appCtx->filesScreenCtx->shouldRepaint = true;
     }
 
@@ -652,14 +686,15 @@ void files_screen_logic(AppState *ctx) {
 
         // Draw Filetype
         char fullpath[4096];
-        SDL_snprintf(fullpath, sizeof(fullpath), "%s/%s", ctx->appCtx->filesScreenCtx->currentDirectory, ctx->appCtx->filesScreenCtx->entries[i]);
+        SDL_snprintf(fullpath, sizeof(fullpath), "%s/%s", ctx->appCtx->filesScreenCtx->currentDirectory,
+                     ctx->appCtx->filesScreenCtx->entries[i]);
         SDL_PathInfo info;
         if (!SDL_GetPathInfo(fullpath, &info)) {
             SDL_Log("  %s  [ERROR: %s]", ctx->appCtx->filesScreenCtx->entries[i], SDL_GetError());
         }
         char filetype_text[64];
         SDL_snprintf(filetype_text, sizeof(filetype_text), "Filetype: %s",
-                 pathtype_to_str(info.type));
+                     pathtype_to_str(info.type));
         draw_text(pixels, item_x + 8, item_y + 30, filetype_text, text_color);
 
         // Draw description??
@@ -757,7 +792,7 @@ void keyboard_screen_logic(AppState *ctx) {
 
     char latestScanCodeAsString[128];
     SDL_snprintf(latestScanCodeAsString, sizeof(latestScanCodeAsString), "0x%02X",
-             ctx->appCtx->keyboardScreenCtx->latestScancode);
+                 ctx->appCtx->keyboardScreenCtx->latestScancode);
 
     char const *lines[] = {
         "Keyboard test",
@@ -866,9 +901,10 @@ void sensors_screen_logic(AppState *ctx) {
     char sensor2[128];
     if (ctx->appCtx->sensorsScreenCtx->orientationSensor != NULL) {
         orientation_device_t *orientation_device = ctx->appCtx->sensorsScreenCtx->orientationSensor;
-        SDL_snprintf(sensor1, sizeof(sensor1), "orientation: %d", orientation_device->_get_orientation(orientation_device));
+        SDL_snprintf(sensor1, sizeof(sensor1), "orientation: %d",
+                     orientation_device->_get_orientation(orientation_device));
         SDL_snprintf(sensor2, sizeof(sensor2), "orientation degress: %d",
-                 orientation_device->_get_orientation_degrees(orientation_device));
+                     orientation_device->_get_orientation_degrees(orientation_device));
     }
     char sensor3[128];
     char sensor4[128];
