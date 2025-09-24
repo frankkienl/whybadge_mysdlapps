@@ -66,6 +66,7 @@ typedef enum {
     KEYBOARD_SCREEN,
     FILES_SCREEN,
     SENSORS_SCREEN,
+    COLOR_SCREEN,
     ABOUT_SCREEN
 } RandomAppScreens;
 
@@ -81,7 +82,7 @@ typedef struct {
 } MenuScreenOption_t;
 
 typedef enum {
-    MENU_KEYS, MENU_FILES, MENU_SENSORS, MENU_ABOUT, MENU_COUNT
+    MENU_KEYS, MENU_FILES, MENU_SENSORS, MENU_COLOR, MENU_ABOUT, MENU_COUNT
 } MenuScreenOptions;
 
 typedef struct {
@@ -120,12 +121,20 @@ typedef struct {
 } SensorsScreenContext;
 
 typedef struct {
+    bool flipflop;
+    Uint16 last_fps_time;
+    int frame_count;
+    int current_fps;
+} ColorScreenContext;
+
+typedef struct {
     int currentScreen;
     WelcomeScreenContext *welcomeScreenCtx;
     MenuScreenContext *menuScreenCtx;
     KeyboardScreenContext *keyboardScreenCtx;
     FilesScreenContext *filesScreenCtx;
     SensorsScreenContext *sensorsScreenCtx;
+    ColorScreenContext *colorScreenCtx;
 } RandomAppContext;
 
 typedef struct {
@@ -304,12 +313,14 @@ void menu_screen_logic(AppState *ctx) {
             {"Keyboard test", "1.0", "Check keyboard scancodes"},
             {"File explorer", "0.1", "Read files and directories"},
             {"Sensors", "1.0", "Read sensor data"},
+            {"Color test", "1.0", "Check FPS"},
             {"About", "1.0", "About this app"}
         };
         ctx->appCtx->menuScreenCtx->menu_options[0] = items[0];
         ctx->appCtx->menuScreenCtx->menu_options[1] = items[1];
         ctx->appCtx->menuScreenCtx->menu_options[2] = items[2];
         ctx->appCtx->menuScreenCtx->menu_options[3] = items[3];
+        ctx->appCtx->menuScreenCtx->menu_options[4] = items[4];
         ctx->appCtx->menuScreenCtx->shouldRepaint = true;
     }
 
@@ -464,7 +475,7 @@ void files_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                 SDL_Log("  %s  [ERROR: %s]", ctx->entries[ctx->selected_item], SDL_GetError());
             }
             if (info.type == SDL_PATHTYPE_DIRECTORY) {
-                SDL_snprintf((char*)ctx->currentDirectory, sizeof(ctx->currentDirectory), "%s", fullpath);
+                SDL_snprintf((char *) ctx->currentDirectory, sizeof(ctx->currentDirectory), "%s", fullpath);
                 ctx->total_items = 0;
                 ctx->selected_item = 0;
                 //SDL_free(ctx->entries);
@@ -518,6 +529,10 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
                     as->appCtx->currentScreen = SENSORS_SCREEN;
                     break;
                 }
+                case MENU_COLOR: {
+                    as->appCtx->currentScreen = COLOR_SCREEN;
+                    break;
+                }
                 case MENU_ABOUT: {
                     as->appCtx->currentScreen = ABOUT_SCREEN;
                     break;
@@ -530,7 +545,7 @@ void menu_screen_handle_key(AppState *as, const SDL_Scancode key_code) {
 
 #ifndef WHY_BADGE
 SDL_EnumerationResult my_enumerate_callback(void *userdata, const char *dirname, const char *fname) {
-    FilesScreenContext *ctx = (FilesScreenContext *)userdata;
+    FilesScreenContext *ctx = (FilesScreenContext *) userdata;
     SDL_Log("Found file: %s%s", dirname, fname);
     // Add to entries
     ctx->entries[ctx->total_items] = SDL_strdup(fname);
@@ -605,7 +620,8 @@ void files_screen_logic(AppState *ctx) {
     if (ctx->appCtx->filesScreenCtx->total_items == 0) {
         if (strlen(ctx->appCtx->filesScreenCtx->currentDirectory) == 0) {
             // Initialize to first root folder
-            SDL_snprintf(ctx->appCtx->filesScreenCtx->currentDirectory, sizeof(ctx->appCtx->filesScreenCtx->currentDirectory), "%s", rootFolders[0]);
+            SDL_snprintf(ctx->appCtx->filesScreenCtx->currentDirectory,
+                         sizeof(ctx->appCtx->filesScreenCtx->currentDirectory), "%s", rootFolders[0]);
             SDL_Log("setting initial directory to '%s'\n", ctx->appCtx->filesScreenCtx->currentDirectory);
         }
 
@@ -614,7 +630,8 @@ void files_screen_logic(AppState *ctx) {
         ctx->appCtx->filesScreenCtx->total_items = 1;
         ctx->appCtx->filesScreenCtx->selected_item = 0;
 
-        bool success = SDL_EnumerateDirectory(ctx->appCtx->filesScreenCtx->currentDirectory, my_enumerate_callback, ctx->appCtx->filesScreenCtx);
+        bool success = SDL_EnumerateDirectory(ctx->appCtx->filesScreenCtx->currentDirectory, my_enumerate_callback,
+                                              ctx->appCtx->filesScreenCtx);
         if (!success) {
             SDL_Log(
                 "SDL_EnumerateDirectory error for '%s': %s",
@@ -749,7 +766,7 @@ void files_screen_logic(AppState *ctx) {
         pixels,
         window_x + 15,
         window_y + window_h - 35,
-        (char*)ctx->appCtx->filesScreenCtx->currentDirectory,
+        (char *) ctx->appCtx->filesScreenCtx->currentDirectory,
         CDE_TEXT_COLOR
     );
 
@@ -817,6 +834,42 @@ void keyboard_screen_logic(AppState *ctx) {
         content_y += FONT_HEIGHT + 8;
     }
 
+    // Render everything
+    SDL_RenderClear(ctx->renderer);
+    SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
+    SDL_RenderTexture(ctx->renderer, ctx->framebuffer, NULL, NULL);
+    SDL_RenderPresent(ctx->renderer);
+}
+
+// Add these static variables at the top of your file or inside your render function
+void color_screen_logic(AppState *ctx) {
+
+    Uint16 *pixels = ctx->pixels;
+
+    // In your render function, after rendering everything:
+    ctx->appCtx->colorScreenCtx->frame_count++;
+    Uint64 now = SDL_GetTicks();
+    if (now - ctx->appCtx->colorScreenCtx->last_fps_time >= 1000) { // 1 second elapsed
+        ctx->appCtx->colorScreenCtx->current_fps = ctx->appCtx->colorScreenCtx->frame_count;
+        ctx->appCtx->colorScreenCtx->frame_count = 0;
+        ctx->appCtx->colorScreenCtx->last_fps_time = now;
+    }
+
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, 0x000000);
+    draw_rect(pixels, 0, 0, WINDOW_WIDTH, 20, 0xFF0000);
+    draw_rect(pixels, 0, 20, WINDOW_WIDTH, 40, 0x00ff00);
+    draw_rect(pixels, 0, 40, WINDOW_WIDTH, 60, 0x0000ff);
+
+    // Render FPS as text (replace with your draw_text function)
+    char fps_text[32];
+    SDL_snprintf(fps_text, sizeof(fps_text), "FPS: %d", ctx->appCtx->colorScreenCtx->current_fps);
+    draw_text(pixels, 10, 10, fps_text, CDE_TEXT_COLOR);
+
+
+
+
+    draw_rect(pixels, 40, 100, 100, 100, (ctx->appCtx->colorScreenCtx->flipflop) ? 0xFFFF00 : 0x00FFFF);
+    ctx->appCtx->colorScreenCtx->flipflop = !ctx->appCtx->colorScreenCtx->flipflop;
     // Render everything
     SDL_RenderClear(ctx->renderer);
     SDL_UpdateTexture(ctx->framebuffer, NULL, ctx->pixels, WINDOW_WIDTH * sizeof(Uint16));
@@ -1054,6 +1107,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
             break;
         case ABOUT_SCREEN: about_screen_logic(appstate);
             break;
+        case COLOR_SCREEN: color_screen_logic(appstate);
+            break;
         default: break;
     }
 
@@ -1123,6 +1178,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     as->appCtx->filesScreenCtx = (FilesScreenContext *) SDL_calloc(1, sizeof(FilesScreenContext));
     as->appCtx->keyboardScreenCtx = (KeyboardScreenContext *) SDL_calloc(1, sizeof(KeyboardScreenContext));
     as->appCtx->sensorsScreenCtx = (SensorsScreenContext *) SDL_calloc(1, sizeof(SensorsScreenContext));
+    as->appCtx->colorScreenCtx = (ColorScreenContext *) SDL_calloc(1, sizeof(ColorScreenContext));
 
     //Create window first
     as->window = SDL_CreateWindow(APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_FLAGS);
@@ -1238,6 +1294,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
         SDL_free(as->appCtx->filesScreenCtx);
         SDL_free(as->appCtx->menuScreenCtx);
         SDL_free(as->appCtx->welcomeScreenCtx);
+        SDL_free(as->appCtx->colorScreenCtx);
         SDL_free(as->appCtx);
         SDL_free(as->pixels);
         SDL_DestroyTexture(as->framebuffer);
